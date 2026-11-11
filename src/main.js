@@ -1,119 +1,340 @@
-import "./style.css";
+import './style.css';
 
-import { createLoop } from "./loop.js";
-import { createInput } from "./input.js";
+import { createLoop } from './loop.js';
+import { createInput } from './input.js';
+import { attachHoming } from './sim/behaviors.js';
+import { Vector2 } from './sim/vector.js';
+import { Ship } from './sim/ship.js';
+import { World } from './sim/world.js';
+import { Asteroid } from './sim/asteroid.js';
+import { Bullet } from './sim/bullet.js';
+import { Pickup } from './sim/pickup.js';
+import { Explosion } from './sim/explosion.js';
 
-import { createShip, integrate, interpolateShip } from "./sim/ship.js";
+import { setupCanvas } from './render/canvas.js';
+import { drawScene } from './render/draw.js';
 
-import { wrapShip } from "./sim/arena.js";
+const canvas = document.querySelector('#game');
 
-import { setupCanvas } from "./render/canvas.js";
-import { drawScene } from "./render/draw.js";
-
-const canvas = document.querySelector("#game");
-
-const stepsElement = document.querySelector("#steps");
-const fpsElement = document.querySelector("#fps");
-const frameTimeElement = document.querySelector("#frame-time");
-const centerMessage = document.querySelector("#center-message");
+const stepsElement = document.querySelector('#steps');
+const fpsElement = document.querySelector('#fps');
+const frameTimeElement = document.querySelector('#frame-time');
+const centerMessage = document.querySelector('#center-message');
 
 const surface = setupCanvas(canvas);
 const input = createInput(window);
 
-let current = createShip(surface.width / 2, surface.height / 2);
+const world = new World();
 
-let previous = { ...current };
-let hasMoved = false;
+// Налаштування гри.
+const FIRE_INTERVAL = 0.2;
+const BULLET_SPEED = 550;
+const RESPAWN_DELAY = 2;
+const MAX_ASTEROIDS = 10;
+const ASTEROID_SCORE = 100;
 
-// Дані для експерименту №3.
-let experimentStartedAt = null;
-let experimentStartPosition = null;
-let experimentFinished = false;
+// Стан гри.
+let score = 0;
+let respawnTimer = 0;
+let fireCooldown = 0;
+let asteroidSpawnTimer = 0;
+let pickupSpawnTimer = 0;
 
-function simulate(dt) {
-  previous = { ...current };
+// Поточний корабель.
+let ship = null;
 
-  // Початок вимірювання після натискання W або стрілки вгору.
-  const isThrusting = input.isDown("ArrowUp") || input.isDown("KeyW");
+// Попередній стан корабля для інтерполяції.
+let previousPosition = new Vector2();
+let previousAngle = 0;
 
-  if (isThrusting && experimentStartedAt === null) {
-    experimentStartedAt = performance.now();
+// Створення корабля.
+function spawnShip(position = null) {
+  const spawnPosition =
+    position ?? new Vector2(surface.width / 2, surface.height / 2);
 
-    experimentStartPosition = {
-      x: current.x,
-      y: current.y,
-    };
+  const newShip = new Ship({
+    position: spawnPosition,
+    velocity: new Vector2(),
+  });
 
-    console.log("Експеримент №3 розпочато.");
-    console.log("Утримуйте W протягом 5 секунд.");
-  }
+  world.spawn(newShip);
 
-  // Фізика корабля зі змінним timestep.
-  current = integrate(current, input, dt);
+  ship = newShip;
 
-  current = wrapShip(current, surface.width, surface.height);
+  previousPosition = ship.position;
+  previousAngle = ship.angle;
 
-  if (current.thrust) {
-    hasMoved = true;
-    centerMessage.classList.add("hidden");
-  }
+  fireCooldown = 0;
+  respawnTimer = 0;
 
-  // Перевірка завершення п'яти секунд.
-  if (
-    experimentStartedAt !== null &&
-    !experimentFinished &&
-    performance.now() - experimentStartedAt >= 5000
-  ) {
-    experimentFinished = true;
+  centerMessage.classList.add('hidden');
+}
 
-    const elapsed = (performance.now() - experimentStartedAt) / 1000;
+// Випадкова позиція в межах арени.
+function randomPosition() {
+  return new Vector2(
+    Math.random() * surface.width,
+    Math.random() * surface.height,
+  );
+}
 
-    const displacementX = current.x - experimentStartPosition.x;
+// Пошук безпечного місця для відродження.
+function findSafeSpawnPosition() {
+  const minDistance = 140;
+  const maxAttempts = 30;
 
-    const displacementY = current.y - experimentStartPosition.y;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const position = randomPosition();
 
-    const distance = Math.hypot(displacementX, displacementY);
+    const isSafe = [...world].every((entity) => {
+      if (
+        entity.dead ||
+        entity.kind === 'bullet' ||
+        entity.kind === 'explosion'
+      ) {
+        return true;
+      }
 
-    console.log("Експеримент №3 завершено.");
-    console.log("Час:", elapsed.toFixed(2), "секунд");
-    console.log("Початкова позиція:", experimentStartPosition);
-    console.log("Кінцева позиція:", {
-      x: current.x.toFixed(2),
-      y: current.y.toFixed(2),
+      const distance = position.sub(entity.position).length();
+
+      return distance > minDistance + entity.radius;
     });
-    console.log("Зміщення по X:", displacementX.toFixed(2));
-    console.log("Зміщення по Y:", displacementY.toFixed(2));
-    console.log("Відстань між позиціями:", distance.toFixed(2));
+
+    if (isSafe) {
+      return position;
+    }
   }
 
+  return new Vector2(surface.width / 2, surface.height / 2);
+}
+
+// Створення астероїда.
+
+function spawnAsteroid() {
+  const position = randomPosition();
+
+  const asteroid = new Asteroid({
+    position,
+    velocity: new Vector2(
+      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 100,
+    ),
+    radius: 20 + Math.random() * 20,
+    hp: 50,
+  });
+
+  // Кожен третій астероїд отримує homing-поведінку.
+  const isHoming = Math.random() < 0.33;
+
+  if (isHoming) {
+    attachHoming(asteroid, {
+      speed: 90,
+      turnRate: 1.5,
+      getTarget: () => {
+        return ship && !ship.dead ? ship : null;
+      },
+    });
+  }
+
+  world.spawn(asteroid);
+
+  return asteroid;
+}
+
+// Створення бонуса.
+function spawnPickup() {
+  const pickup = new Pickup({
+    position: randomPosition(),
+    type: 'health',
+    value: 25,
+  });
+
+  world.spawn(pickup);
+
+  return pickup;
+}
+
+// Створення кулі.
+function fireBullet() {
+  if (!ship || ship.dead) {
+    return;
+  }
+
+  const direction = Vector2.fromAngle(ship.angle);
+
+  const bullet = new Bullet({
+    position: ship.position.add(direction.scale(ship.radius + 8)),
+    velocity: ship.velocity.add(direction.scale(BULLET_SPEED)),
+    damage: 25,
+    ttl: 1.5,
+  });
+
+  world.spawn(bullet);
+}
+
+// Переміщення об'єктів через межі арени.
+function wrapEntity(entity) {
+  const width = surface.width;
+  const height = surface.height;
+
+  let x = entity.position.x;
+  let y = entity.position.y;
+
+  if (x < 0) x += width;
+  if (x >= width) x -= width;
+
+  if (y < 0) y += height;
+  if (y >= height) y -= height;
+
+  if (x !== entity.position.x || y !== entity.position.y) {
+    entity.position = new Vector2(x, y);
+  }
+}
+
+// Створення вибуху.
+function createExplosion(position) {
+  world.spawn(
+    new Explosion({
+      position,
+      particleCount: 12,
+      duration: 0.6,
+      radius: 30,
+    }),
+  );
+}
+
+// Обробка знищених сутностей.
+function handleRemovedEntities(removedEntities) {
+  for (const entity of removedEntities) {
+    if (entity.kind === 'asteroid') {
+      createExplosion(entity.position);
+      score += ASTEROID_SCORE;
+    }
+
+    if (entity.kind === 'ship') {
+      createExplosion(entity.position);
+    }
+  }
+}
+
+// Ініціалізація гри.
+spawnShip();
+
+for (let i = 0; i < 6; i++) {
+  spawnAsteroid();
+}
+
+spawnPickup();
+
+// Основна симуляція.
+function simulate(dt) {
+  // Зберігаємо попередню позицію корабля.
+  if (ship && !ship.dead) {
+    previousPosition = ship.position;
+    previousAngle = ship.angle;
+
+    // Перевірка стрільби.
+    fireCooldown -= dt;
+
+    if (input.isDown('Space') && fireCooldown <= 0) {
+      fireBullet();
+      fireCooldown = FIRE_INTERVAL;
+    }
+  }
+
+  // Оновлюємо світ.
+  // Корабель отримує керування через input.
+  const removedEntities = world.step(dt, ship, input);
+
+  // Обробляємо знищені об'єкти.
+  handleRemovedEntities(removedEntities);
+
+  // Переміщуємо всі сутності через межі арени.
+  for (const entity of world) {
+    wrapEntity(entity);
+  }
+
+  // Автоматичне створення астероїдів.
+  asteroidSpawnTimer += dt;
+
+  if (asteroidSpawnTimer >= 3) {
+    asteroidSpawnTimer = 0;
+
+    if ([...world.ofKind('asteroid')].length < MAX_ASTEROIDS) {
+      spawnAsteroid();
+    }
+  }
+
+  // Періодичне створення бонусів.
+  pickupSpawnTimer += dt;
+
+  if (pickupSpawnTimer >= 12) {
+    pickupSpawnTimer = 0;
+
+    if ([...world.ofKind('pickup')].length < 3) {
+      spawnPickup();
+    }
+  }
+
+  // Відродження корабля після знищення.
+  if (ship && ship.dead) {
+    respawnTimer += dt;
+
+    if (respawnTimer >= RESPAWN_DELAY) {
+      const safePosition = findSafeSpawnPosition();
+
+      spawnShip(safePosition);
+    }
+  }
+
+  // Оновлення стану введення.
   input.endStep();
 }
 
+// Відображення гри.
 function render(alpha, stats) {
-  const shipForRender = interpolateShip(previous, current, alpha);
+  let shipForRender = null;
 
-  // Корекція інтерполяції при переході через межі арени.
-  if (Math.abs(current.x - previous.x) > surface.width / 2) {
-    shipForRender.x = current.x;
+  if (ship && !ship.dead) {
+    shipForRender = {
+      x: previousPosition.x + (ship.position.x - previousPosition.x) * alpha,
+
+      y: previousPosition.y + (ship.position.y - previousPosition.y) * alpha,
+
+      angle: previousAngle + (ship.angle - previousAngle) * alpha,
+
+      thrust: ship.thrust,
+      hp: ship.hp,
+    };
   }
 
-  if (Math.abs(current.y - previous.y) > surface.height / 2) {
-    shipForRender.y = current.y;
-  }
-
-  drawScene(surface.ctx, surface.width, surface.height, shipForRender, stats);
+  // Малювання всієї сцени.
+  drawScene(
+    surface.ctx,
+    surface.width,
+    surface.height,
+    shipForRender,
+    stats,
+    [...world],
+    score,
+  );
 
   // Оновлення HUD.
   stepsElement.textContent = stats.stepsPerSecond;
   fpsElement.textContent = stats.framesPerSecond;
   frameTimeElement.textContent = stats.frameTime.toFixed(2);
 
-  if (hasMoved) {
-    centerMessage.classList.add("hidden");
+  if (centerMessage) {
+    if (!ship || ship.dead) {
+      centerMessage.classList.remove('hidden');
+      centerMessage.textContent = 'SHIP DESTROYED';
+    } else if (ship.thrust) {
+      centerMessage.classList.add('hidden');
+    }
   }
 }
 
-// Запуск циклу зі змінним timestep.
+// Запуск ігрового циклу.
 const gameLoop = createLoop({
   simulate,
   render,
@@ -122,7 +343,7 @@ const gameLoop = createLoop({
 gameLoop.start();
 
 // Очищення ресурсів.
-window.addEventListener("beforeunload", () => {
+window.addEventListener('beforeunload', () => {
   gameLoop.stop();
   input.destroy();
   surface.destroy();

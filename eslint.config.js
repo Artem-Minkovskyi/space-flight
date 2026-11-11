@@ -1,26 +1,26 @@
-import js from "@eslint/js";
-import globals from "globals";
+import js from '@eslint/js';
+import globals from 'globals';
 
 export default [
   js.configs.recommended,
   {
-    files: ["**/*.js"],
+    files: ['**/*.js'],
     languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
+      ecmaVersion: 'latest',
+      sourceType: 'module',
       globals: {
         ...globals.browser,
         ...globals.node,
       },
     },
     rules: {
-      "no-unused-vars": "warn",
-      "no-undef": "error",
-      "no-var": "error",
-      "prefer-const": "error",
+      'no-unused-vars': 'warn',
+      'no-undef': 'error',
+      'no-var': 'error',
+      'prefer-const': 'error',
     },
   },
   {
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: ['dist/**', 'node_modules/**'],
   },
 ];

@@ -2,10 +2,10 @@
  * Налаштовує Canvas з урахуванням devicePixelRatio.
  */
 export function setupCanvas(canvas) {
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext('2d');
 
   if (!ctx) {
-    throw new Error("Ваш браузер не підтримує Canvas 2D.");
+    throw new Error('Ваш браузер не підтримує Canvas 2D.');
   }
 
   let width = 0;

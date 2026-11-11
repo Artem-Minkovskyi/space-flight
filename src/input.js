@@ -17,7 +17,7 @@ export function createInput(target = window) {
 
     // Забороняємо прокручування сторінки стрілками.
     if (
-      ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(
         event.code,
       )
     ) {
@@ -37,9 +37,9 @@ export function createInput(target = window) {
   }
 
   // Реєстрація обробників подій.
-  target.addEventListener("keydown", onKeyDown);
-  target.addEventListener("keyup", onKeyUp);
-  target.addEventListener("blur", onBlur);
+  target.addEventListener('keydown', onKeyDown);
+  target.addEventListener('keyup', onKeyUp);
+  target.addEventListener('blur', onBlur);
 
   return {
     // Перевіряє, чи утримується клавіша.
@@ -59,9 +59,9 @@ export function createInput(target = window) {
 
     // Видаляє обробники подій.
     destroy() {
-      target.removeEventListener("keydown", onKeyDown);
-      target.removeEventListener("keyup", onKeyUp);
-      target.removeEventListener("blur", onBlur);
+      target.removeEventListener('keydown', onKeyDown);
+      target.removeEventListener('keyup', onKeyUp);
+      target.removeEventListener('blur', onBlur);
 
       down.clear();
       pressed.clear();
