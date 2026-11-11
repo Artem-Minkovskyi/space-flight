@@ -14,6 +14,14 @@ import { Explosion } from './sim/explosion.js';
 import { setupCanvas } from './render/canvas.js';
 import { drawScene } from './render/draw.js';
 
+import { GameEvents } from './events.js';
+import { AudioManager, connectAudio } from './audio.js';
+import { loadAll } from './assets/assetManager.js';
+
+import { Lobby } from './lobby/Lobby.js';
+import { createLobbyDOM } from './lobby/dom.js';
+
+// DOM-елементи гри.
 const canvas = document.querySelector('#game');
 
 const stepsElement = document.querySelector('#steps');
@@ -21,17 +29,60 @@ const fpsElement = document.querySelector('#fps');
 const frameTimeElement = document.querySelector('#frame-time');
 const centerMessage = document.querySelector('#center-message');
 
+// DOM-елементи завантаження.
+const loadingScreen = document.querySelector('#loading-screen');
+const loadingStatus = document.querySelector('#loading-status');
+const loadingProgress = document.querySelector('#loading-progress');
+const loadingCount = document.querySelector('#loading-count');
+const loadingPercent = document.querySelector('#loading-percent');
+const loadingError = document.querySelector('#loading-error');
+
+const startButton = document.querySelector('#start-loading');
+const retryButton = document.querySelector('#retry-loading');
+const cancelButton = document.querySelector('#cancel-loading');
+
+// DOM-елементи Lobby.
+const lobbyScreen = document.querySelector('#lobby-screen');
+const lobbyContainer = document.querySelector('#lobby-container');
+
+// Ініціалізація Canvas та керування.
 const surface = setupCanvas(canvas);
 const input = createInput(window);
 
 const world = new World();
 
+// Система подій та аудіо.
+const events = new GameEvents();
+const audio = new AudioManager();
+
+connectAudio(events, audio);
+
+// Ініціалізація Lobby.
+const lobby = new Lobby({
+  roomsUrl: '/api/rooms.json',
+  pollInterval: 5000,
+});
+
+const lobbyDOM = createLobbyDOM(lobbyContainer, lobby);
+
+// Завантажені ресурси.
+let images = {};
+let audioBuffers = {};
+
+// Контролер скасування завантаження.
+let loadingController = null;
+let loadingInProgress = false;
+let gameStarted = false;
+
 // Налаштування гри.
 const FIRE_INTERVAL = 0.2;
 const BULLET_SPEED = 550;
 const RESPAWN_DELAY = 2;
-const MAX_ASTEROIDS = 10;
 const ASTEROID_SCORE = 100;
+
+// Налаштування поточної кімнати.
+let maxAsteroids = 10;
+let asteroidSpeedMultiplier = 1;
 
 // Стан гри.
 let score = 0;
@@ -58,7 +109,6 @@ function spawnShip(position = null) {
   });
 
   world.spawn(newShip);
-
   ship = newShip;
 
   previousPosition = ship.position;
@@ -109,26 +159,20 @@ function findSafeSpawnPosition() {
 }
 
 // Створення астероїда.
-
 function spawnAsteroid() {
-  const position = randomPosition();
-
   const asteroid = new Asteroid({
-    position,
+    position: randomPosition(),
     velocity: new Vector2(
-      (Math.random() - 0.5) * 100,
-      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 100 * asteroidSpeedMultiplier,
+      (Math.random() - 0.5) * 100 * asteroidSpeedMultiplier,
     ),
     radius: 20 + Math.random() * 20,
     hp: 50,
   });
 
-  // Кожен третій астероїд отримує homing-поведінку.
-  const isHoming = Math.random() < 0.33;
-
-  if (isHoming) {
+  if (Math.random() < 0.33) {
     attachHoming(asteroid, {
-      speed: 90,
+      speed: 90 * asteroidSpeedMultiplier,
       turnRate: 1.5,
       getTarget: () => {
         return ship && !ship.dead ? ship : null;
@@ -170,6 +214,8 @@ function fireBullet() {
   });
 
   world.spawn(bullet);
+
+  events.emit('fired', { bullet });
 }
 
 // Переміщення об'єктів через межі арени.
@@ -209,31 +255,22 @@ function handleRemovedEntities(removedEntities) {
     if (entity.kind === 'asteroid') {
       createExplosion(entity.position);
       score += ASTEROID_SCORE;
+      events.emit('exploded', { entity });
     }
 
     if (entity.kind === 'ship') {
       createExplosion(entity.position);
+      events.emit('exploded', { entity });
     }
   }
 }
 
-// Ініціалізація гри.
-spawnShip();
-
-for (let i = 0; i < 6; i++) {
-  spawnAsteroid();
-}
-
-spawnPickup();
-
 // Основна симуляція.
 function simulate(dt) {
-  // Зберігаємо попередню позицію корабля.
   if (ship && !ship.dead) {
     previousPosition = ship.position;
     previousAngle = ship.angle;
 
-    // Перевірка стрільби.
     fireCooldown -= dt;
 
     if (input.isDown('Space') && fireCooldown <= 0) {
@@ -242,30 +279,26 @@ function simulate(dt) {
     }
   }
 
-  // Оновлюємо світ.
-  // Корабель отримує керування через input.
-  const removedEntities = world.step(dt, ship, input);
+  const removedEntities = world.step(dt, ship, input, (name, detail) =>
+    events.emit(name, detail),
+  );
 
-  // Обробляємо знищені об'єкти.
   handleRemovedEntities(removedEntities);
 
-  // Переміщуємо всі сутності через межі арени.
   for (const entity of world) {
     wrapEntity(entity);
   }
 
-  // Автоматичне створення астероїдів.
   asteroidSpawnTimer += dt;
 
   if (asteroidSpawnTimer >= 3) {
     asteroidSpawnTimer = 0;
 
-    if ([...world.ofKind('asteroid')].length < MAX_ASTEROIDS) {
+    if ([...world.ofKind('asteroid')].length < maxAsteroids) {
       spawnAsteroid();
     }
   }
 
-  // Періодичне створення бонусів.
   pickupSpawnTimer += dt;
 
   if (pickupSpawnTimer >= 12) {
@@ -276,18 +309,14 @@ function simulate(dt) {
     }
   }
 
-  // Відродження корабля після знищення.
   if (ship && ship.dead) {
     respawnTimer += dt;
 
     if (respawnTimer >= RESPAWN_DELAY) {
-      const safePosition = findSafeSpawnPosition();
-
-      spawnShip(safePosition);
+      spawnShip(findSafeSpawnPosition());
     }
   }
 
-  // Оновлення стану введення.
   input.endStep();
 }
 
@@ -298,17 +327,13 @@ function render(alpha, stats) {
   if (ship && !ship.dead) {
     shipForRender = {
       x: previousPosition.x + (ship.position.x - previousPosition.x) * alpha,
-
       y: previousPosition.y + (ship.position.y - previousPosition.y) * alpha,
-
       angle: previousAngle + (ship.angle - previousAngle) * alpha,
-
       thrust: ship.thrust,
       hp: ship.hp,
     };
   }
 
-  // Малювання всієї сцени.
   drawScene(
     surface.ctx,
     surface.width,
@@ -317,9 +342,9 @@ function render(alpha, stats) {
     stats,
     [...world],
     score,
+    images,
   );
 
-  // Оновлення HUD.
   stepsElement.textContent = stats.stepsPerSecond;
   fpsElement.textContent = stats.framesPerSecond;
   frameTimeElement.textContent = stats.frameTime.toFixed(2);
@@ -334,17 +359,155 @@ function render(alpha, stats) {
   }
 }
 
-// Запуск ігрового циклу.
-const gameLoop = createLoop({
-  simulate,
-  render,
+// Створення ігрового циклу.
+let gameLoop = null;
+
+// Запуск гри з конфігурацією вибраної кімнати.
+function startGame(config = {}) {
+  if (gameStarted) {
+    return;
+  }
+
+  maxAsteroids = Math.max(1, Number(config.asteroids) || 6);
+  asteroidSpeedMultiplier = Math.max(0.1, Number(config.asteroidSpeed) || 1);
+
+  score = 0;
+  asteroidSpawnTimer = 0;
+  pickupSpawnTimer = 0;
+
+  spawnShip();
+
+  for (let i = 0; i < maxAsteroids; i++) {
+    spawnAsteroid();
+  }
+
+  spawnPickup();
+
+  gameLoop = createLoop({
+    simulate,
+    render,
+  });
+
+  gameLoop.start();
+
+  gameStarted = true;
+
+  console.log('Гру запущено з конфігурацією:', config);
+}
+
+// Оновлення індикатора завантаження.
+function updateProgress(progress) {
+  loadingProgress.style.width = `${progress.percent}%`;
+  loadingCount.textContent = `${progress.loaded} / ${progress.total}`;
+  loadingPercent.textContent = `${progress.percent}%`;
+
+  if (progress.current) {
+    loadingStatus.textContent = `Завантаження: ${progress.current}`;
+  }
+}
+
+// Відкриття Lobby після завантаження ресурсів.
+function showLobby() {
+  loadingScreen.classList.add('hidden');
+  lobbyScreen.classList.remove('hidden');
+
+  lobby.show();
+}
+
+// Обробка вибору кімнати.
+lobby.addEventListener('join', (event) => {
+  const { playerName, room, config } = event.detail;
+
+  console.log('Гравець:', playerName);
+  console.log('Вибрана кімната:', room.name);
+  console.log('Конфігурація арени:', config);
+
+  lobbyScreen.classList.add('hidden');
+
+  startGame(config);
 });
 
-gameLoop.start();
+// Обробка помилок Lobby.
+lobby.addEventListener('error', (event) => {
+  console.error('Помилка Lobby:', event.detail.error);
+});
+
+// Завантаження всіх ресурсів.
+async function startLoading() {
+  if (loadingInProgress || gameStarted) {
+    return;
+  }
+
+  loadingInProgress = true;
+  loadingController = new AbortController();
+
+  startButton.hidden = true;
+  retryButton.hidden = true;
+  cancelButton.hidden = false;
+
+  loadingError.textContent = '';
+  loadingStatus.textContent = 'Ініціалізація аудіо...';
+
+  try {
+    // AudioContext створюється після натискання користувача.
+    await audio.initialize();
+
+    loadingStatus.textContent = 'Завантаження ресурсів...';
+
+    const assets = await loadAll({
+      manifestUrl: '/manifest.json',
+      audioContext: audio.context,
+      signal: loadingController.signal,
+      onProgress: updateProgress,
+    });
+
+    images = assets.images;
+    audioBuffers = assets.audio;
+
+    audio.setBuffers(audioBuffers);
+
+    // Після завантаження відкриваємо Lobby.
+    showLobby();
+  } catch (error) {
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      loadingStatus.textContent = 'Завантаження скасовано';
+      loadingError.textContent = 'Можна повторити завантаження.';
+    } else {
+      console.error('Asset loading error:', error);
+
+      loadingStatus.textContent = 'Не вдалося завантажити ресурси';
+      loadingError.textContent = error.message;
+    }
+
+    retryButton.hidden = false;
+  } finally {
+    loadingInProgress = false;
+    loadingController = null;
+    cancelButton.hidden = true;
+  }
+}
+
+// Скасування завантаження.
+function cancelLoading() {
+  if (loadingController) {
+    loadingController.abort();
+  }
+}
+
+// Обробники кнопок.
+startButton.addEventListener('click', startLoading);
+retryButton.addEventListener('click', startLoading);
+cancelButton.addEventListener('click', cancelLoading);
 
 // Очищення ресурсів.
 window.addEventListener('beforeunload', () => {
-  gameLoop.stop();
+  loadingController?.abort();
+
+  lobby.destroy();
+  lobbyDOM.destroy();
+
+  gameLoop?.stop();
   input.destroy();
   surface.destroy();
+  audio.destroy();
 });

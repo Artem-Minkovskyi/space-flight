@@ -19,7 +19,6 @@ export class World {
     }
   }
 
-  // Видаляє знищені сутності та повертає їх.
   sweep() {
     const removed = [];
 
@@ -33,8 +32,7 @@ export class World {
     return removed;
   }
 
-  // Оновлює світ, передаючи керування потрібній сутності.
-  step(deltaTime, inputEntity = null, input = null) {
+  step(deltaTime, inputEntity = null, input = null, emit = () => {}) {
     for (const entity of this.entities.values()) {
       if (entity.dead) {
         continue;
@@ -48,7 +46,7 @@ export class World {
       }
     }
 
-    resolveCollisions(this);
+    resolveCollisions(this, emit);
 
     return this.sweep();
   }

@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#070b18" />
-    <title>Space Flight — Lab 01</title>
+    <title>Space Flight — Lab 03</title>
   </head>
   <body>
     <main class="game-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">JAVASCRIPT · LAB 01</p>
+          <p class="eyebrow">JAVASCRIPT · LAB 03</p>
           <h1>SPACE FLIGHT</h1>
         </div>
 
@@ -53,15 +53,55 @@
       <footer class="bottom-bar">
         <div class="controls">
           <span><kbd>W</kbd> / <kbd>↑</kbd> тяга</span>
-          <span
-            ><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> поворот</span
-          >
+          <span>
+            <kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> поворот
+          </span>
           <span><kbd>S</kbd> / <kbd>↓</kbd> гальмування</span>
         </div>
 
         <p>Краї арени з'єднані · Fixed timestep: 60 Hz</p>
       </footer>
     </main>
+
+    <!-- Лобі вибору гравця та кімнати -->
+    <section class="lobby-screen hidden" id="lobby-screen">
+      <div id="lobby-container"></div>
+    </section>
+
+    <!-- Екран завантаження ресурсів -->
+    <section class="loading-screen" id="loading-screen">
+      <div class="loading-card">
+        <p class="eyebrow">JAVASCRIPT · LAB 03</p>
+        <h2>ПІДГОТОВКА ДО ЗАПУСКУ</h2>
+
+        <p class="loading-description" id="loading-status">
+          Готові до завантаження ресурсів
+        </p>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="loading-progress"></div>
+        </div>
+
+        <div class="progress-info">
+          <span id="loading-count">0 / 0</span>
+          <strong id="loading-percent">0%</strong>
+        </div>
+
+        <p class="loading-error" id="loading-error"></p>
+
+        <div class="loading-actions">
+          <button id="start-loading" type="button">
+            УВІМКНУТИ ЗВУК І ЗАВАНТАЖИТИ
+          </button>
+
+          <button id="retry-loading" type="button" hidden>
+            СПРОБУВАТИ ЩЕ РАЗ
+          </button>
+
+          <button id="cancel-loading" type="button" hidden>СКАСУВАТИ</button>
+        </div>
+      </div>
+    </section>
 
     <script type="module" src="/src/main.js"></script>
   </body>

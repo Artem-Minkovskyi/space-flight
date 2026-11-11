@@ -1,0 +1,37 @@
+{
+  "rooms": [
+    {
+      "id": "easy",
+      "name": "Початкова",
+      "description": "Невелика кількість астероїдів",
+      "arena": {
+        "width": 800,
+        "height": 600,
+        "asteroids": 8,
+        "asteroidSpeed": 1
+      }
+    },
+    {
+      "id": "normal",
+      "name": "Стандартна",
+      "description": "Збалансований режим гри",
+      "arena": {
+        "width": 1000,
+        "height": 700,
+        "asteroids": 15,
+        "asteroidSpeed": 2
+      }
+    },
+    {
+      "id": "hard",
+      "name": "Складна",
+      "description": "Багато швидких астероїдів",
+      "arena": {
+        "width": 1200,
+        "height": 800,
+        "asteroids": 25,
+        "asteroidSpeed": 3
+      }
+    }
+  ]
+}

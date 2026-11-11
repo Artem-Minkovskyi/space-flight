@@ -25,6 +25,19 @@ function createStars(width, height) {
   );
 }
 
+function drawSprite(ctx, image, x, y, width, height, angle = 0) {
+  if (!image) return false;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.drawImage(image, -width / 2, -height / 2, width, height);
+
+  ctx.restore();
+  return true;
+}
+
 export function drawScene(
   ctx,
   width,
@@ -33,6 +46,7 @@ export function drawScene(
   stats,
   entities = [],
   score = 0,
+  images = {},
 ) {
   if (width !== starWidth || height !== starHeight) {
     stars = createStars(width, height);
@@ -88,11 +102,11 @@ export function drawScene(
 
     switch (entity.kind) {
       case 'asteroid':
-        drawAsteroid(ctx, entity);
+        drawAsteroid(ctx, entity, images.asteroid);
         break;
 
       case 'bullet':
-        drawBullet(ctx, entity);
+        drawBullet(ctx, entity, images.bullet);
         break;
 
       case 'pickup':
@@ -100,29 +114,29 @@ export function drawScene(
         break;
 
       case 'explosion':
-        drawExplosion(ctx, entity);
+        drawExplosion(ctx, entity, images.explosion);
         break;
     }
   }
 
   // Корабель.
   if (ship) {
-    drawShip(ctx, ship);
+    drawShip(ctx, ship, images.ship);
   }
 
-  // HUD.
   drawHUD(ctx, width, height, score, ship);
 
   void stats;
 }
 
-export function drawShip(ctx, ship) {
+export function drawShip(ctx, ship, image) {
   ctx.save();
 
-  ctx.translate(ship.x, ship.y);
-  ctx.rotate(ship.angle);
+  if (ship.thrust && !image) {
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(ship.angle);
 
-  if (ship.thrust) {
     ctx.beginPath();
     ctx.moveTo(-13, -5);
     ctx.lineTo(-35, 0);
@@ -133,45 +147,69 @@ export function drawShip(ctx, ship) {
     ctx.shadowColor = '#ff7b35';
     ctx.shadowBlur = 16;
     ctx.fill();
-    ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
-  ctx.beginPath();
-  ctx.moveTo(19, 0);
-  ctx.lineTo(-13, -11);
-  ctx.lineTo(-7, 0);
-  ctx.lineTo(-13, 11);
-  ctx.closePath();
+  if (image) {
+    // SVG-корабель спрямований угору,
+    // тому додаємо 90 градусів.
+    drawSprite(ctx, image, ship.x, ship.y, 48, 48, ship.angle + Math.PI / 2);
+  } else {
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(ship.angle);
 
-  ctx.fillStyle = '#b8eaff';
-  ctx.strokeStyle = '#50d7ff';
-  ctx.lineWidth = 2;
-  ctx.shadowColor = '#37bfff';
-  ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.moveTo(19, 0);
+    ctx.lineTo(-13, -11);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-13, 11);
+    ctx.closePath();
 
-  ctx.fill();
-  ctx.stroke();
+    ctx.fillStyle = '#b8eaff';
+    ctx.strokeStyle = '#50d7ff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#37bfff';
+    ctx.shadowBlur = 18;
+
+    ctx.fill();
+    ctx.stroke();
+  }
 
   ctx.restore();
 }
 
-function drawAsteroid(ctx, asteroid) {
-  ctx.save();
-
-  ctx.translate(asteroid.position.x, asteroid.position.y);
-
+function drawAsteroid(ctx, asteroid, image) {
+  const { x, y } = asteroid.position;
   const radius = asteroid.radius;
+
+  if (
+    drawSprite(
+      ctx,
+      image,
+      x,
+      y,
+      radius * 2.4,
+      radius * 2.4,
+      asteroid.angle ?? 0,
+    )
+  ) {
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
 
   ctx.beginPath();
 
   for (let i = 0; i < 10; i++) {
     const angle = (i / 10) * TAU;
     const variation = i % 2 === 0 ? 1 : 0.78;
-    const x = Math.cos(angle) * radius * variation;
-    const y = Math.sin(angle) * radius * variation;
+    const px = Math.cos(angle) * radius * variation;
+    const py = Math.sin(angle) * radius * variation;
 
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
   }
 
   ctx.closePath();
@@ -188,16 +226,18 @@ function drawAsteroid(ctx, asteroid) {
   ctx.restore();
 }
 
-function drawBullet(ctx, bullet) {
-  ctx.save();
+function drawBullet(ctx, bullet, image) {
+  if (drawSprite(ctx, image, bullet.position.x, bullet.position.y, 20, 20)) {
+    return;
+  }
 
+  ctx.save();
   ctx.beginPath();
   ctx.arc(bullet.position.x, bullet.position.y, bullet.radius, 0, TAU);
 
   ctx.fillStyle = '#ffe58a';
   ctx.shadowColor = '#ffcc4d';
   ctx.shadowBlur = 15;
-
   ctx.fill();
 
   ctx.restore();
@@ -205,7 +245,6 @@ function drawBullet(ctx, bullet) {
 
 function drawPickup(ctx, pickup) {
   ctx.save();
-
   ctx.translate(pickup.position.x, pickup.position.y);
 
   ctx.beginPath();
@@ -220,7 +259,6 @@ function drawPickup(ctx, pickup) {
   ctx.fill();
   ctx.stroke();
 
-  // Символ плюса.
   ctx.fillStyle = '#aaffcc';
   ctx.fillRect(-2, -7, 4, 14);
   ctx.fillRect(-7, -2, 14, 4);
@@ -228,17 +266,32 @@ function drawPickup(ctx, pickup) {
   ctx.restore();
 }
 
-function drawExplosion(ctx, explosion) {
+function drawExplosion(ctx, explosion, image) {
   ctx.save();
 
   const alpha = explosion.progress;
+
+  if (image) {
+    ctx.globalAlpha = alpha;
+
+    drawSprite(
+      ctx,
+      image,
+      explosion.position.x,
+      explosion.position.y,
+      70 * (1 - alpha * 0.3),
+      70 * (1 - alpha * 0.3),
+    );
+
+    ctx.restore();
+    return;
+  }
 
   for (const particle of explosion.particles) {
     const x = explosion.position.x + particle.position.x;
     const y = explosion.position.y + particle.position.y;
 
     ctx.beginPath();
-
     ctx.arc(x, y, 2 + 3 * alpha, 0, TAU);
 
     ctx.fillStyle = `rgba(255, 150, 65, ${alpha})`;
@@ -254,11 +307,9 @@ function drawHUD(ctx, width, height, score, ship) {
   ctx.font = 'bold 16px Arial';
   ctx.textBaseline = 'top';
 
-  // Рахунок у нижньому лівому куті.
   ctx.fillStyle = '#b8eaff';
   ctx.fillText(`SCORE: ${score}`, 20, height - 40);
 
-  // Здоров'я у верхньому правому куті.
   if (ship) {
     ctx.fillStyle = '#ffffff';
     ctx.fillText(`HP: ${ship.hp}`, width - 100, 20);
