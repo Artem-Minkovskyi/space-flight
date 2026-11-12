@@ -1,3 +1,4 @@
+
 const TAU = Math.PI * 2;
 
 let stars = [];
@@ -47,6 +48,7 @@ export function drawScene(
   entities = [],
   score = 0,
   images = {},
+  remoteShips = [],
 ) {
   if (width !== starWidth || height !== starHeight) {
     stars = createStars(width, height);
@@ -119,9 +121,34 @@ export function drawScene(
     }
   }
 
-  // Корабель.
+  // Корабель поточного гравця.
   if (ship) {
     drawShip(ctx, ship, images.ship);
+  }
+
+  // Кораблі інших гравців.
+  for (const remoteShip of remoteShips) {
+    if (remoteShip.dead) continue;
+
+    drawShip(ctx, remoteShip, images.ship);
+
+    // Ім'я гравця над кораблем.
+    ctx.save();
+
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#8eb8ff';
+    ctx.shadowColor = '#071329';
+    ctx.shadowBlur = 5;
+
+    ctx.fillText(
+      remoteShip.nickname ?? 'Гравець',
+      remoteShip.x,
+      remoteShip.y - 30,
+    );
+
+    ctx.restore();
   }
 
   drawHUD(ctx, width, height, score, ship);

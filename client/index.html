@@ -50,6 +50,56 @@
         </div>
       </section>
 
+
+    <section class="replay-panel" id="replay-panel">
+      <div class="replay-header">
+        <div>
+          <p class="eyebrow">MATCH RECORDING</p>
+          <h2>REPLAY</h2>
+        </div>
+
+        <span class="replay-status" id="replay-status">
+          Очікування запису
+        </span>
+      </div>
+
+      <div class="replay-controls">
+        <button id="replay-load" type="button">
+          ЗАВАНТАЖИТИ
+        </button>
+
+        <button id="replay-play" type="button" disabled>
+          PLAY
+        </button>
+
+        <button id="replay-pause" type="button" disabled>
+          PAUSE
+        </button>
+
+        <select id="replay-speed" disabled>
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+
+      <div class="replay-timeline">
+        <span id="replay-current-time">00:00</span>
+
+        <input
+          id="replay-progress"
+          type="range"
+          min="0"
+          max="100"
+          value="0"
+          disabled
+        />
+
+        <span id="replay-duration">00:00</span>
+      </div>
+    </section>
+
+
       <footer class="bottom-bar">
         <div class="controls">
           <span><kbd>W</kbd> / <kbd>↑</kbd> тяга</span>
@@ -62,6 +112,54 @@
         <p>Краї арени з'єднані · Fixed timestep: 60 Hz</p>
       </footer>
     </main>
+
+
+    <!-- Панель мережевої гри -->
+    <section class="network-panel hidden" id="network-panel">
+      <div class="network-header">
+        <div>
+          <p class="eyebrow">MULTIPLAYER</p>
+          <h2 id="network-room-name">Кімната</h2>
+        </div>
+
+        <div class="connection-status">
+          <span class="status-dot" id="connection-dot"></span>
+          <span id="connection-status">Підключення...</span>
+        </div>
+      </div>
+
+      <div class="network-content">
+        <div class="chat-section">
+          <h3>Чат гравців</h3>
+
+          <div class="chat-messages" id="chat-messages">
+            <p class="chat-empty">Повідомлень поки немає</p>
+          </div>
+
+          <form id="chat-form" class="chat-form">
+            <input
+              id="chat-input"
+              type="text"
+              maxlength="1000"
+              placeholder="Напишіть повідомлення..."
+              autocomplete="off"
+            />
+            <button type="submit">НАДІСЛАТИ</button>
+          </form>
+        </div>
+
+        <div class="players-section">
+          <h3>Гравці</h3>
+          <ul id="players-list">
+            <li>Очікування гравців...</li>
+          </ul>
+
+          <button id="leave-room" type="button">
+            ПОКИНУТИ КІМНАТУ
+          </button>
+        </div>
+      </div>
+    </section>
 
     <!-- Лобі вибору гравця та кімнати -->
     <section class="lobby-screen hidden" id="lobby-screen">
