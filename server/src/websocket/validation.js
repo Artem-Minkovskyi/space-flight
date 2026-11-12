@@ -6,6 +6,7 @@ const MESSAGE_TYPES = {
   CHAT: 'chat',
   LEAVE: 'leave',
   STATE: 'state',
+  INPUT: 'input',
 };
 
 const MAX_POSITION = 100000;
@@ -103,6 +104,7 @@ export function validateMessage(data, isBinary = false) {
 
       message.roomId = message.roomId.trim();
       message.nickname = message.nickname.trim();
+      message.protocol = message.protocol === 'binary' ? 'binary' : 'json';
       break;
 
     case MESSAGE_TYPES.CHAT:
@@ -123,6 +125,18 @@ export function validateMessage(data, isBinary = false) {
 
     case MESSAGE_TYPES.LEAVE:
       break;
+
+    case MESSAGE_TYPES.INPUT: {
+      const input = message.input;
+      if (!input || !Number.isInteger(input.seq) || input.seq < 0 ||
+          !isFiniteNumber(input.throttle) || Math.abs(input.throttle) > 1 ||
+          !isFiniteNumber(input.turn) || Math.abs(input.turn) > 1 ||
+          typeof input.fire !== 'boolean') {
+        return { valid: false, error: 'Invalid input command', closeCode: 1008 };
+      }
+      message.input = { seq: input.seq >>> 0, throttle: input.throttle, turn: input.turn, fire: input.fire };
+      break;
+    }
 
     case MESSAGE_TYPES.STATE: {
       const state = message.state;

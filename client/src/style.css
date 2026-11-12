@@ -704,3 +704,18 @@ kbd {
   accent-color: #56d8ff;
   cursor: pointer;
 }
+
+.netgraph {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(100, 190, 255, .25);
+  border-radius: 10px;
+  background: rgba(8, 18, 35, .75);
+  color: #b8d8ef;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.netgraph strong { color: #55ffad; letter-spacing: .12em; }

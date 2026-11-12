@@ -3,12 +3,14 @@ export class WebSocketClient {
   constructor({
     url,
     onMessage = () => {},
+    onBinary = () => {},
     onStatusChange = () => {},
     maxQueueSize = 100,
     maxReconnectDelay = 30000,
   }) {
     this.url = url;
     this.onMessage = onMessage;
+    this.onBinary = onBinary;
     this.onStatusChange = onStatusChange;
 
     this.maxQueueSize = maxQueueSize;
@@ -35,6 +37,7 @@ export class WebSocketClient {
     this.onStatusChange('connecting');
 
     this.socket = new WebSocket(this.url);
+    this.socket.binaryType = 'arraybuffer';
 
     this.socket.addEventListener('open', () => {
       this.reconnectAttempts = 0;
@@ -44,6 +47,7 @@ export class WebSocketClient {
     });
 
     this.socket.addEventListener('message', (event) => {
+      if (event.data instanceof ArrayBuffer) { this.onBinary(event.data); return; }
       try {
         this.onMessage(JSON.parse(event.data));
       } catch (error) {
@@ -83,6 +87,14 @@ export class WebSocketClient {
 
     this.queue.push(serialized);
     return true;
+  }
+
+  sendBinary(buffer) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 1024 * 1024) {
+      this.socket.send(buffer);
+      return true;
+    }
+    return false;
   }
 
   flushQueue() {

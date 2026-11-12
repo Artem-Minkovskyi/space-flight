@@ -11,6 +11,6 @@
     "explosion": "/assets/audio/explosion.wav"
   },
   "json": {
-    "arena": "/api/rooms.json"
+    "arena": "/api/rooms"
   }
 }

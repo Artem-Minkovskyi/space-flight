@@ -109,7 +109,7 @@
           <span><kbd>S</kbd> / <kbd>↓</kbd> гальмування</span>
         </div>
 
-        <p>Краї арени з'єднані · Fixed timestep: 60 Hz</p>
+        <p>Краї арени з'єднані · Local render: 60 Hz · Server tick: 30 Hz</p>
       </footer>
     </main>
 
@@ -126,6 +126,11 @@
           <span class="status-dot" id="connection-dot"></span>
           <span id="connection-status">Підключення...</span>
         </div>
+      </div>
+
+      <div class="netgraph" aria-live="polite">
+        <strong>NETGRAPH</strong>
+        <span id="netgraph-values">RTT: — ms · Snapshot age: — ms · Traffic: 0 B/s · Input queue: 0 · Correction: 0 px</span>
       </div>
 
       <div class="network-content">

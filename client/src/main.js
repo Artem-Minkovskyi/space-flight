@@ -22,6 +22,8 @@ import { loadAll } from './assets/assetManager.js';
 import { Lobby } from './lobby/Lobby.js';
 import { createLobbyDOM } from './lobby/dom.js';
 import { WebSocketClient } from './network/WebSocketClient.js';
+import { encodeInput, decodeSnapshot } from '../../shared/protocol.js';
+import { integrateShip } from '../../shared/simulation.js';
 
 // DOM-елементи гри.
 const canvas = document.querySelector('#game');
@@ -98,6 +100,16 @@ let currentRoomName = null;
 
 // Стан кораблів інших гравців.
 const remoteShips = new Map();
+const playerIdToNickname = new Map();
+let inputSequence = 0;
+let playerId = null;
+const protocolMode = new URLSearchParams(location.search).get('protocol') === 'json' ? 'json' : 'binary';
+let pendingInputs = [];
+let correctionMagnitude = 0;
+let bytesReceived = 0;
+let bytesSent = 0;
+let bandwidthSampleAt = performance.now();
+let bytesPerSecond = 0;
 
 // Стан системи Replay.
 let replayEvents = [];
@@ -316,7 +328,7 @@ function seekReplay(value) {
 // Таймер відправлення стану корабля.
 let networkStateTimer = 0;
 
-const NETWORK_UPDATE_INTERVAL = 1 / 20;
+const NETWORK_UPDATE_INTERVAL = 1 / 30;
 
 // Завантажені ресурси.
 let images = {};
@@ -452,6 +464,8 @@ function handleNetworkMessage(message) {
       networkRoomName.textContent = currentRoomName ?? 'Кімната';
 
       updatePlayersList(message.room?.players ?? []);
+      playerId = message.playerId ?? null;
+      for (const player of message.room?.players ?? []) if (player.id) playerIdToNickname.set(player.id, player.nickname);
 
       appendChatMessage(
         'Система',
@@ -483,6 +497,11 @@ function handleNetworkMessage(message) {
         }
       }
 
+      break;
+    }
+
+    case 'snapshot': {
+      processSnapshot(message);
       break;
     }
 
@@ -535,6 +554,42 @@ function handleNetworkMessage(message) {
 }
 
 
+function processSnapshot(snapshot) {
+  const now = performance.now();
+  const players = snapshot.players ?? [];
+  for (const player of players) {
+    const nickname = player.nickname ?? playerIdToNickname.get(player.id);
+    if (!nickname) continue;
+    if (player.id) playerIdToNickname.set(player.id, nickname);
+    if (player.id === playerId && ship && !ship.dead) {
+      const serverState = player.state;
+      correctionMagnitude = Math.hypot(ship.position.x - serverState.x, ship.position.y - serverState.y);
+      pendingInputs = pendingInputs.filter((entry) => entry.seq > (serverState.seq ?? 0));
+      let corrected = { ...serverState };
+      for (const entry of pendingInputs) corrected = integrateShip(corrected, entry);
+      ship.position = new Vector2(corrected.x, corrected.y);
+      ship.velocity = new Vector2(corrected.vx, corrected.vy);
+      ship.angle = corrected.angle;
+      continue;
+    }
+    if (nickname === currentPlayerName) continue;
+    const previous = remoteShips.get(nickname);
+    remoteShips.set(nickname, { nickname, previous: previous?.current ?? player.state, current: player.state, receivedAt: now });
+  }
+  if (now - bandwidthSampleAt >= 1000) {
+    bytesPerSecond = bytesReceived + bytesSent;
+    bytesReceived = 0; bytesSent = 0; bandwidthSampleAt = now;
+  }
+  const graph = document.querySelector('#netgraph-values');
+  if (graph) graph.textContent = `RTT: — ms · Snapshot age: 0 ms · Traffic: ${bytesPerSecond} B/s · Input queue: ${pendingInputs.length} · Correction: ${correctionMagnitude.toFixed(1)} px`;
+}
+
+function handleBinaryMessage(buffer) {
+  bytesReceived += buffer.byteLength;
+  try { processSnapshot(decodeSnapshot(new Uint8Array(buffer))); }
+  catch (error) { console.error('Invalid binary snapshot:', error); }
+}
+
 // Створення WebSocket-підключення.
 function connectToRoom(playerName, room) {
   if (networkClient) {
@@ -564,6 +619,7 @@ function connectToRoom(playerName, room) {
     url: wsUrl,
 
     onMessage: handleNetworkMessage,
+    onBinary: handleBinaryMessage,
 
     onStatusChange: (status) => {
       updateConnectionStatus(status);
@@ -575,6 +631,7 @@ function connectToRoom(playerName, room) {
           type: 'join',
           roomId: currentRoomId,
           nickname: currentPlayerName,
+          protocol: protocolMode,
         });
       }
     },
@@ -838,30 +895,22 @@ function simulate(dt) {
     events.emit(name, detail),
   );
 
-  // Синхронізація стану корабля з іншими гравцями.
+  // Надсилаємо лише команди керування; координати обчислює сервер.
   networkStateTimer += dt;
-
-  if (
-    networkStateTimer >= NETWORK_UPDATE_INTERVAL &&
-    networkClient &&
-    currentRoomId &&
-    ship
-  ) {
+  if (networkStateTimer >= NETWORK_UPDATE_INTERVAL && networkClient && currentRoomId && ship) {
     networkStateTimer = 0;
-
-    networkClient.send({
-      type: 'state',
-      state: {
-        x: ship.position.x,
-        y: ship.position.y,
-        vx: ship.velocity.x,
-        vy: ship.velocity.y,
-        angle: ship.angle,
-        hp: ship.hp,
-        thrust: ship.thrust,
-        dead: ship.dead,
-      },
-    });
+    const throttle = Number(input.isDown('ArrowUp') || input.isDown('KeyW')) - Number(input.isDown('ArrowDown') || input.isDown('KeyS'));
+    const turn = Number(input.isDown('ArrowRight') || input.isDown('KeyD')) - Number(input.isDown('ArrowLeft') || input.isDown('KeyA'));
+    const command = { seq: ++inputSequence, throttle, turn, fire: input.isDown('Space') };
+    pendingInputs.push(command);
+    if (pendingInputs.length > 120) pendingInputs.shift();
+    if (protocolMode === 'binary') {
+      const packet = encodeInput(command);
+      if (networkClient.sendBinary(packet)) bytesSent += packet.byteLength;
+    } else {
+      networkClient.send({ type: 'input', input: command });
+      bytesSent += 48;
+    }
   }
 
   handleRemovedEntities(removedEntities);

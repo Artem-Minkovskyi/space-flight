@@ -1,322 +1,184 @@
-
 import { WebSocketServer, WebSocket } from 'ws';
 import { MAX_MESSAGE_SIZE, validateMessage } from './validation.js';
+import { createShipState, integrateShip, SIMULATION } from '../../../shared/simulation.js';
+import { decodeInput, encodeSnapshot } from '../../../shared/protocol.js';
 
 const MAX_BUFFERED_AMOUNT = 1024 * 1024;
-const MAX_MESSAGES_PER_SECOND = 60;
+const MAX_MESSAGES_PER_SECOND = 90;
 const JOIN_TIMEOUT = 5000;
 const HEARTBEAT_INTERVAL = 15000;
-const STATE_LOG_INTERVAL = 200;
+const TICK_MS = 1000 / SIMULATION.tickRate;
 
 function sendJson(socket, message) {
-  if (socket.readyState !== WebSocket.OPEN) {
-    return false;
-  }
-
-  if (socket.bufferedAmount > MAX_BUFFERED_AMOUNT) {
-    console.warn('WebSocket buffer limit exceeded');
-    return false;
-  }
-
-  socket.send(JSON.stringify(message), (error) => {
-    if (error) {
-      console.error('WebSocket send error:', error.message);
-    }
-  });
-
+  if (socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > MAX_BUFFERED_AMOUNT) return false;
+  socket.send(JSON.stringify(message));
   return true;
 }
 
 function broadcastRoomUpdate(room) {
-  room.broadcast({
-    type: 'room:update',
-    room: {
-      ...room.getInfo(),
-      players: [...room.clients.values()],
-    },
-  });
+  room.broadcast({ type: 'room:update', room: { ...room.getInfo(), players: [...room.clients.values()] } });
+}
+
+function sendSnapshot(room, tick) {
+  const players = [...room.clients.values()].map((user) => ({
+    id: user.id, nickname: user.nickname, state: user.state,
+  }));
+  for (const [socket, user] of room.clients.entries()) {
+    if (socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > MAX_BUFFERED_AMOUNT) continue;
+    if (user.protocol === 'binary') {
+      socket.send(encodeSnapshot(tick, players));
+    } else {
+      socket.send(JSON.stringify({ type: 'snapshot', tick, players }));
+    }
+  }
 }
 
 export function attachWebSocketServer(httpServer, roomManager, logger) {
-  const webSocketServer = new WebSocketServer({
-    server: httpServer,
-    path: '/ws',
-    maxPayload: MAX_MESSAGE_SIZE,
-    perMessageDeflate: false,
-  });
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws', maxPayload: MAX_MESSAGE_SIZE, perMessageDeflate: false });
+  let nextPlayerId = 1;
+  let tick = 0;
+  let nextTick = performance.now() + TICK_MS;
+  let tickTimer;
 
-  webSocketServer.on('connection', (socket) => {
+  function runTick() {
+    const now = performance.now();
+    // Target-time scheduling avoids accumulating setInterval drift.
+    while (now >= nextTick) {
+      tick++;
+      for (const room of roomManager.rooms.values()) {
+        for (const user of room.clients.values()) {
+          user.state = integrateShip(user.state, user.input, SIMULATION.dt, room.arena);
+        }
+        if (room.clients.size) sendSnapshot(room, tick);
+      }
+      nextTick += TICK_MS;
+    }
+    tickTimer = setTimeout(runTick, Math.max(0, nextTick - performance.now()));
+  }
+  tickTimer = setTimeout(runTick, TICK_MS);
+
+  wss.on('connection', (socket) => {
     socket.room = null;
     socket.nickname = null;
     socket.isAlive = true;
-    socket.missedPongs = 0;
     socket.messageTimestamps = [];
-    socket.lastStateLog = 0;
-
     const joinTimer = setTimeout(() => {
       if (!socket.room) {
-        sendJson(socket, {
-          type: 'error',
-          message: 'Join timeout',
-        });
-
+        sendJson(socket, { type: 'error', message: 'Join timeout' });
         socket.close(4001, 'Join timeout');
       }
     }, JOIN_TIMEOUT);
 
-    socket.on('pong', () => {
-      socket.isAlive = true;
-      socket.missedPongs = 0;
-    });
-
+    socket.on('pong', () => { socket.isAlive = true; });
     socket.on('message', (data, isBinary) => {
       const now = Date.now();
-
-      socket.messageTimestamps = socket.messageTimestamps.filter(
-        (timestamp) => now - timestamp < 1000,
-      );
-
+      socket.messageTimestamps = socket.messageTimestamps.filter((time) => now - time < 1000);
       if (socket.messageTimestamps.length >= MAX_MESSAGES_PER_SECOND) {
-        sendJson(socket, {
-          type: 'error',
-          message: 'Rate limit exceeded',
-        });
-
+        sendJson(socket, { type: 'error', message: 'Rate limit exceeded' });
         socket.close(4002, 'Rate limit exceeded');
         return;
       }
-
       socket.messageTimestamps.push(now);
 
-      const validation = validateMessage(data, isBinary);
-
-      if (!validation.valid) {
-        sendJson(socket, {
-          type: 'error',
-          message: validation.error,
-        });
-
-        socket.close(
-          validation.closeCode ?? 1008,
-          validation.error,
-        );
-
-        return;
+      let message;
+      if (isBinary) {
+        try {
+          if (!socket.room) throw new Error('Join a room before sending input');
+          const input = decodeInput(Buffer.from(data));
+          message = { type: 'input', input };
+        } catch (error) {
+          sendJson(socket, { type: 'error', message: error.message });
+          return;
+        }
+      } else {
+        const result = validateMessage(data, false);
+        if (!result.valid) {
+          sendJson(socket, { type: 'error', message: result.error });
+          socket.close(result.closeCode ?? 1008, result.error);
+          return;
+        }
+        message = result.message;
       }
-
-      const message = validation.message;
 
       switch (message.type) {
         case 'join': {
           const room = roomManager.getRoom(message.roomId);
-
-          if (!room) {
-            sendJson(socket, {
-              type: 'error',
-              message: 'Room not found',
-            });
-            break;
-          }
-
-          if (socket.room) {
-            sendJson(socket, {
-              type: 'error',
-              message: 'Already joined a room',
-            });
-            break;
-          }
-
+          if (!room) { sendJson(socket, { type: 'error', message: 'Room not found' }); break; }
+          if (socket.room) { sendJson(socket, { type: 'error', message: 'Already joined a room' }); break; }
           clearTimeout(joinTimer);
-
           socket.room = room;
           socket.nickname = message.nickname;
-
+          const id = nextPlayerId++ % 65535 || 1;
           room.addClient(socket, socket.nickname);
-
-          sendJson(socket, {
-            type: 'joined',
-            room: room.getInfo(),
-            nickname: socket.nickname,
+          const user = room.clients.get(socket);
+          Object.assign(user, {
+            id,
+            protocol: message.protocol === 'binary' ? 'binary' : 'json',
+            state: createShipState(room.arena.width / 2 + (room.clients.size - 1) * 35, room.arena.height / 2),
+            input: { seq: 0, throttle: 0, turn: 0, fire: false },
           });
-
+          sendJson(socket, { type: 'joined', playerId: id, protocol: user.protocol, room: { ...room.getInfo(), players: [...room.clients.values()] } });
           broadcastRoomUpdate(room);
-
-          room.broadcast(
-            {
-              type: 'system',
-              message: `${socket.nickname} joined the room`,
-              timestamp: new Date().toISOString(),
-            },
-            socket,
-          );
-
+          room.broadcast({ type: 'system', message: `${socket.nickname} joined the room`, timestamp: new Date().toISOString() }, socket);
           break;
         }
-
         case 'chat': {
-          if (!socket.room) {
-            sendJson(socket, {
-              type: 'error',
-              message: 'You must join a room first',
-            });
-            break;
-          }
-
-          logger?.log({
-            type: 'chat',
-            roomId: socket.room.id,
-            nickname: socket.nickname,
-            text: message.text,
-          });
-
-          socket.room.broadcast({
-            type: 'chat',
-            nickname: socket.nickname,
-            text: message.text,
-            timestamp: new Date().toISOString(),
-          });
-
+          if (!socket.room) { sendJson(socket, { type: 'error', message: 'You must join a room first' }); break; }
+          logger?.log({ type: 'chat', roomId: socket.room.id, nickname: socket.nickname, text: message.text });
+          socket.room.broadcast({ type: 'chat', nickname: socket.nickname, text: message.text, timestamp: new Date().toISOString() });
           break;
         }
-
-        case 'state': {
-          if (!socket.room) {
-            sendJson(socket, {
-              type: 'error',
-              message: 'You must join a room first',
-            });
-            break;
-          }
-
-          // Записуємо стан корабля в журнал не частіше ніж раз на 200 мс.
-          const stateTimestamp = Date.now();
-
-          if (
-            !socket.lastStateLog ||
-            stateTimestamp - socket.lastStateLog >= STATE_LOG_INTERVAL
-          ) {
-            logger?.log({
-              type: 'player:state',
-              roomId: socket.room.id,
-              nickname: socket.nickname,
-              state: message.state,
-            });
-
-            socket.lastStateLog = stateTimestamp;
-          }
-
-          // Передаємо стан корабля іншим учасникам кімнати.
-          socket.room.broadcast(
-            {
-              type: 'player:state',
-              nickname: socket.nickname,
-              state: message.state,
-              timestamp: Date.now(),
-            },
-            socket,
-          );
-
+        case 'input': {
+          if (!socket.room) { sendJson(socket, { type: 'error', message: 'Join a room first' }); break; }
+          const user = socket.room.clients.get(socket);
+          if (message.input.seq > user.input.seq) user.input = message.input;
           break;
         }
-
         case 'leave': {
           if (socket.room) {
             const room = socket.room;
             const nickname = socket.nickname;
-
             room.removeClient(socket);
-
-            socket.room = null;
-            socket.nickname = null;
-
-            sendJson(socket, {
-              type: 'left',
-            });
-
+            socket.room = null; socket.nickname = null;
+            sendJson(socket, { type: 'left' });
             broadcastRoomUpdate(room);
-
-            room.broadcast({
-              type: 'system',
-              message: `${nickname} left the room`,
-              timestamp: new Date().toISOString(),
-            });
+            room.broadcast({ type: 'system', message: `${nickname} left the room`, timestamp: new Date().toISOString() });
           }
-
           break;
         }
-
-        default: {
-          sendJson(socket, {
-            type: 'error',
-            message: 'Unsupported message type',
-          });
-        }
+        default:
+          sendJson(socket, { type: 'error', message: 'Unsupported message type' });
       }
     });
 
     socket.on('close', () => {
       clearTimeout(joinTimer);
-
       if (socket.room) {
         const room = socket.room;
         const nickname = socket.nickname;
-
         room.removeClient(socket);
-
-        socket.room = null;
-        socket.nickname = null;
-
+        socket.room = null; socket.nickname = null;
         broadcastRoomUpdate(room);
-
-        room.broadcast({
-          type: 'system',
-          message: `${nickname} disconnected`,
-          timestamp: new Date().toISOString(),
-        });
+        room.broadcast({ type: 'system', message: `${nickname} disconnected`, timestamp: new Date().toISOString() });
       }
     });
-
-    socket.on('error', (error) => {
-      console.error('WebSocket client error:', error.message);
-    });
+    socket.on('error', (error) => console.error('WebSocket client error:', error.message));
   });
 
   const heartbeatTimer = setInterval(() => {
-    for (const socket of webSocketServer.clients) {
-      if (socket.readyState !== WebSocket.OPEN) {
-        continue;
-      }
-
-      if (!socket.isAlive) {
-        socket.missedPongs += 1;
-
-        if (socket.missedPongs >= 2) {
-          console.warn('Terminating inactive WebSocket client');
-          socket.terminate();
-          continue;
-        }
-      }
-
+    for (const socket of wss.clients) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      if (!socket.isAlive) { socket.terminate(); continue; }
       socket.isAlive = false;
-
-      socket.ping((error) => {
-        if (error) {
-          console.error('WebSocket ping error:', error.message);
-          socket.terminate();
-        }
-      });
+      socket.ping((error) => { if (error) socket.terminate(); });
     }
   }, HEARTBEAT_INTERVAL);
-
   heartbeatTimer.unref();
 
-  webSocketServer.on('close', () => {
+  wss.on('close', () => {
     clearInterval(heartbeatTimer);
+    clearTimeout(tickTimer);
   });
-
-  webSocketServer.on('error', (error) => {
-    console.error('WebSocket server error:', error.message);
-  });
-
-  return webSocketServer;
+  wss.on('error', (error) => console.error('WebSocket server error:', error.message));
+  return wss;
 }
