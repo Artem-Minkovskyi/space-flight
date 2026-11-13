@@ -478,7 +478,6 @@ kbd {
   }
 }
 
-
 /* Multiplayer network panel */
 .network-panel {
   position: relative;
@@ -615,10 +614,10 @@ kbd {
 
 @media (max-width: 600px) {
   .network-panel {
-  width: 100%;
-  margin: 16px auto;
-  padding: 14px;
-}
+    width: 100%;
+    margin: 16px auto;
+    padding: 14px;
+  }
 
   .network-content {
     grid-template-columns: 1fr;
@@ -628,7 +627,6 @@ kbd {
     height: 130px;
   }
 }
-
 
 /* ===================================
    REPLAY PANEL
@@ -712,10 +710,17 @@ kbd {
   align-items: center;
   margin: 12px 0;
   padding: 12px 16px;
-  border: 1px solid rgba(100, 190, 255, .25);
+  border: 1px solid rgba(100, 190, 255, 0.25);
   border-radius: 10px;
-  background: rgba(8, 18, 35, .75);
+  background: rgba(8, 18, 35, 0.75);
   color: #b8d8ef;
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
 }
-.netgraph strong { color: #55ffad; letter-spacing: .12em; }
+.netgraph strong {
+  color: #55ffad;
+  letter-spacing: 0.12em;
+}

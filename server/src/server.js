@@ -1,9 +1,8 @@
-
 import { createHttpServer } from './http/server.js';
-import { attachWebSocketServer } from './websocket/server.js';
+import { attachWebSocketServer } from './websocket/server.ts';
 import { roomManager } from './rooms/index.js';
 import { MatchLogger } from './logs/matchLogger.js';
-import { config } from './config.js';
+import { config } from './config.ts';
 
 const logger = await new MatchLogger(config.logDirectory).start();
 
@@ -20,11 +19,7 @@ roomManager.setEventHandler((eventName, data) => {
 
 const httpServer = createHttpServer();
 
-const webSocketServer = attachWebSocketServer(
-  httpServer,
-  roomManager,
-  logger,
-);
+const webSocketServer = attachWebSocketServer(httpServer, roomManager, logger);
 
 httpServer.on('error', (error) => {
   console.error('HTTP server error:', error);

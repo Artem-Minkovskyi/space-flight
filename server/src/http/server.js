@@ -1,10 +1,9 @@
-
 import { createServer } from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
 import path from 'node:path';
 import { replayMatches } from '../logs/replay.js';
 import { pipeline } from 'node:stream';
-import { config } from '../config.js';
+import { config } from '../config.ts';
 import { roomManager } from '../rooms/index.js';
 
 const MIME_TYPES = {
@@ -100,10 +99,7 @@ async function handleReplayApi(response) {
   try {
     const events = [];
 
-    const logFile = path.join(
-      config.logDirectory,
-      'matches.ndjson',
-    );
+    const logFile = path.join(config.logDirectory, 'matches.ndjson');
 
     await replayMatches(logFile, (event) => {
       events.push(event);
@@ -190,7 +186,10 @@ export function createHttpServer() {
     let url;
 
     try {
-      url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+      url = new URL(
+        request.url,
+        `http://${request.headers.host ?? 'localhost'}`,
+      );
     } catch {
       sendJson(response, 400, { error: 'Invalid URL' });
       return;

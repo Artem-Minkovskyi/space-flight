@@ -1,4 +1,3 @@
-
 import { randomUUID } from 'node:crypto';
 import { Room } from './Room.js';
 
@@ -44,12 +43,12 @@ export class RoomManager {
     this.onEvent = null;
 
     for (const options of DEFAULT_ROOMS) {
-    this.createRoom(
-      options.name,
-      { ...options, persistent: true },
-      options.id,
-  );
-}
+      this.createRoom(
+        options.name,
+        { ...options, persistent: true },
+        options.id,
+      );
+    }
   }
 
   createRoom(name, options = {}, id = randomUUID()) {
@@ -63,12 +62,12 @@ export class RoomManager {
       this.emitRoomEvent('client:left', event);
 
       if (room.isEmpty() && !room.persistent) {
-      this.rooms.delete(room.id);
+        this.rooms.delete(room.id);
 
-      this.emitRoomEvent('room:deleted', {
-        roomId: room.id,
-      });
-    }
+        this.emitRoomEvent('room:deleted', {
+          roomId: room.id,
+        });
+      }
     });
 
     this.rooms.set(id, room);

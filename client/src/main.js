@@ -1,4 +1,3 @@
-
 import './style.css';
 
 import { createLoop } from './loop.js';
@@ -21,9 +20,9 @@ import { loadAll } from './assets/assetManager.js';
 
 import { Lobby } from './lobby/Lobby.js';
 import { createLobbyDOM } from './lobby/dom.js';
-import { WebSocketClient } from './network/WebSocketClient.js';
-import { encodeInput, decodeSnapshot } from '../../shared/protocol.js';
-import { integrateShip } from '../../shared/simulation.js';
+import { WebSocketClient } from './network/WebSocketClient.ts';
+import { encodeInput, decodeSnapshot } from '@space-flight/shared/protocol';
+import { integrateShip } from '@space-flight/shared/simulation';
 
 // DOM-елементи гри.
 const canvas = document.querySelector('#game');
@@ -103,7 +102,10 @@ const remoteShips = new Map();
 const playerIdToNickname = new Map();
 let inputSequence = 0;
 let playerId = null;
-const protocolMode = new URLSearchParams(location.search).get('protocol') === 'json' ? 'json' : 'binary';
+const protocolMode =
+  new URLSearchParams(location.search).get('protocol') === 'json'
+    ? 'json'
+    : 'binary';
 let pendingInputs = [];
 let correctionMagnitude = 0;
 let bytesReceived = 0;
@@ -134,7 +136,8 @@ function formatReplayTime(milliseconds) {
 
 function updateReplayControls() {
   if (replayPlayButton) replayPlayButton.disabled = !replayLoaded;
-  if (replayPauseButton) replayPauseButton.disabled = !replayLoaded || !replayPlaying;
+  if (replayPauseButton)
+    replayPauseButton.disabled = !replayLoaded || !replayPlaying;
   if (replaySpeedSelect) replaySpeedSelect.disabled = !replayLoaded;
   if (replayProgress) replayProgress.disabled = !replayLoaded;
 }
@@ -149,9 +152,10 @@ function updateReplayTimeline() {
   }
 
   if (replayProgress) {
-    replayProgress.value = replayDurationMs > 0
-      ? String((replayPosition / replayDurationMs) * 100)
-      : '0';
+    replayProgress.value =
+      replayDurationMs > 0
+        ? String((replayPosition / replayDurationMs) * 100)
+        : '0';
   }
 }
 
@@ -184,9 +188,13 @@ function getReplayShipsAt(position) {
     const previous = previousEvent.state;
     const next = nextEvent?.state ?? previous;
     const interval = nextEvent ? nextEvent.time - previousEvent.time : 0;
-    const alpha = interval > 0
-      ? Math.max(0, Math.min(1, (targetTimestamp - previousEvent.time) / interval))
-      : 0;
+    const alpha =
+      interval > 0
+        ? Math.max(
+            0,
+            Math.min(1, (targetTimestamp - previousEvent.time) / interval),
+          )
+        : 0;
 
     const previousAngle = Number(previous.angle) || 0;
     const nextAngle = Number(next.angle) || previousAngle;
@@ -197,8 +205,12 @@ function getReplayShipsAt(position) {
 
     ships.push({
       nickname,
-      x: (Number(previous.x) || 0) + ((Number(next.x) || 0) - (Number(previous.x) || 0)) * alpha,
-      y: (Number(previous.y) || 0) + ((Number(next.y) || 0) - (Number(previous.y) || 0)) * alpha,
+      x:
+        (Number(previous.x) || 0) +
+        ((Number(next.x) || 0) - (Number(previous.x) || 0)) * alpha,
+      y:
+        (Number(previous.y) || 0) +
+        ((Number(next.y) || 0) - (Number(previous.y) || 0)) * alpha,
       angle: previousAngle + angleDifference * alpha,
       thrust: alpha < 1 ? Boolean(previous.thrust) : Boolean(next.thrust),
       hp: alpha < 1 ? previous.hp : next.hp,
@@ -224,12 +236,13 @@ async function loadReplay() {
 
     const data = await response.json();
     const stateEvents = Array.isArray(data.events)
-      ? data.events.filter((event) =>
-          event.type === 'player:state' &&
-          event.roomId &&
-          event.nickname &&
-          event.state &&
-          Number.isFinite(Date.parse(event.timestamp)),
+      ? data.events.filter(
+          (event) =>
+            event.type === 'player:state' &&
+            event.roomId &&
+            event.nickname &&
+            event.state &&
+            Number.isFinite(Date.parse(event.timestamp)),
         )
       : [];
 
@@ -263,7 +276,10 @@ async function loadReplay() {
     }
 
     replayStartTimestamp = replayEvents[0].time;
-    replayDurationMs = Math.max(0, replayEvents[replayEvents.length - 1].time - replayStartTimestamp);
+    replayDurationMs = Math.max(
+      0,
+      replayEvents[replayEvents.length - 1].time - replayStartTimestamp,
+    );
     replayPosition = 0;
     replayPlaying = false;
     replayLastFrameTime = 0;
@@ -281,7 +297,8 @@ async function loadReplay() {
     replayPlaying = false;
 
     if (replayStatus) {
-      replayStatus.textContent = error.message || 'Не вдалося завантажити запис';
+      replayStatus.textContent =
+        error.message || 'Не вдалося завантажити запис';
     }
 
     updateReplayControls();
@@ -437,14 +454,10 @@ function updatePlayersList(players = []) {
     const playerItem = document.createElement('li');
 
     const nickname =
-      typeof player === 'string'
-        ? player
-        : player.nickname ?? 'Гравець';
+      typeof player === 'string' ? player : (player.nickname ?? 'Гравець');
 
     playerItem.textContent =
-      nickname === currentPlayerName
-        ? `${nickname} (ви)`
-        : nickname;
+      nickname === currentPlayerName ? `${nickname} (ви)` : nickname;
 
     playersList.appendChild(playerItem);
   });
@@ -465,7 +478,8 @@ function handleNetworkMessage(message) {
 
       updatePlayersList(message.room?.players ?? []);
       playerId = message.playerId ?? null;
-      for (const player of message.room?.players ?? []) if (player.id) playerIdToNickname.set(player.id, player.nickname);
+      for (const player of message.room?.players ?? [])
+        if (player.id) playerIdToNickname.set(player.id, player.nickname);
 
       appendChatMessage(
         'Система',
@@ -553,7 +567,6 @@ function handleNetworkMessage(message) {
   }
 }
 
-
 function processSnapshot(snapshot) {
   const now = performance.now();
   const players = snapshot.players ?? [];
@@ -563,10 +576,16 @@ function processSnapshot(snapshot) {
     if (player.id) playerIdToNickname.set(player.id, nickname);
     if (player.id === playerId && ship && !ship.dead) {
       const serverState = player.state;
-      correctionMagnitude = Math.hypot(ship.position.x - serverState.x, ship.position.y - serverState.y);
-      pendingInputs = pendingInputs.filter((entry) => entry.seq > (serverState.seq ?? 0));
+      correctionMagnitude = Math.hypot(
+        ship.position.x - serverState.x,
+        ship.position.y - serverState.y,
+      );
+      pendingInputs = pendingInputs.filter(
+        (entry) => entry.seq > (serverState.seq ?? 0),
+      );
       let corrected = { ...serverState };
-      for (const entry of pendingInputs) corrected = integrateShip(corrected, entry);
+      for (const entry of pendingInputs)
+        corrected = integrateShip(corrected, entry);
       ship.position = new Vector2(corrected.x, corrected.y);
       ship.velocity = new Vector2(corrected.vx, corrected.vy);
       ship.angle = corrected.angle;
@@ -574,20 +593,31 @@ function processSnapshot(snapshot) {
     }
     if (nickname === currentPlayerName) continue;
     const previous = remoteShips.get(nickname);
-    remoteShips.set(nickname, { nickname, previous: previous?.current ?? player.state, current: player.state, receivedAt: now });
+    remoteShips.set(nickname, {
+      nickname,
+      previous: previous?.current ?? player.state,
+      current: player.state,
+      receivedAt: now,
+    });
   }
   if (now - bandwidthSampleAt >= 1000) {
     bytesPerSecond = bytesReceived + bytesSent;
-    bytesReceived = 0; bytesSent = 0; bandwidthSampleAt = now;
+    bytesReceived = 0;
+    bytesSent = 0;
+    bandwidthSampleAt = now;
   }
   const graph = document.querySelector('#netgraph-values');
-  if (graph) graph.textContent = `RTT: — ms · Snapshot age: 0 ms · Traffic: ${bytesPerSecond} B/s · Input queue: ${pendingInputs.length} · Correction: ${correctionMagnitude.toFixed(1)} px`;
+  if (graph)
+    graph.textContent = `RTT: — ms · Snapshot age: 0 ms · Traffic: ${bytesPerSecond} B/s · Input queue: ${pendingInputs.length} · Correction: ${correctionMagnitude.toFixed(1)} px`;
 }
 
 function handleBinaryMessage(buffer) {
   bytesReceived += buffer.byteLength;
-  try { processSnapshot(decodeSnapshot(new Uint8Array(buffer))); }
-  catch (error) { console.error('Invalid binary snapshot:', error); }
+  try {
+    processSnapshot(decodeSnapshot(new Uint8Array(buffer)));
+  } catch (error) {
+    console.error('Invalid binary snapshot:', error);
+  }
 }
 
 // Створення WebSocket-підключення.
@@ -897,11 +927,25 @@ function simulate(dt) {
 
   // Надсилаємо лише команди керування; координати обчислює сервер.
   networkStateTimer += dt;
-  if (networkStateTimer >= NETWORK_UPDATE_INTERVAL && networkClient && currentRoomId && ship) {
+  if (
+    networkStateTimer >= NETWORK_UPDATE_INTERVAL &&
+    networkClient &&
+    currentRoomId &&
+    ship
+  ) {
     networkStateTimer = 0;
-    const throttle = Number(input.isDown('ArrowUp') || input.isDown('KeyW')) - Number(input.isDown('ArrowDown') || input.isDown('KeyS'));
-    const turn = Number(input.isDown('ArrowRight') || input.isDown('KeyD')) - Number(input.isDown('ArrowLeft') || input.isDown('KeyA'));
-    const command = { seq: ++inputSequence, throttle, turn, fire: input.isDown('Space') };
+    const throttle =
+      Number(input.isDown('ArrowUp') || input.isDown('KeyW')) -
+      Number(input.isDown('ArrowDown') || input.isDown('KeyS'));
+    const turn =
+      Number(input.isDown('ArrowRight') || input.isDown('KeyD')) -
+      Number(input.isDown('ArrowLeft') || input.isDown('KeyA'));
+    const command = {
+      seq: ++inputSequence,
+      throttle,
+      turn,
+      fire: input.isDown('Space'),
+    };
     pendingInputs.push(command);
     if (pendingInputs.length > 120) pendingInputs.shift();
     if (protocolMode === 'binary') {
@@ -976,13 +1020,17 @@ function render(alpha, stats) {
   if (replayLoaded) {
     if (replayPlaying) {
       const delta = Math.max(0, now - replayLastFrameTime);
-      replayPosition = Math.min(replayDurationMs, replayPosition + delta * replaySpeed);
+      replayPosition = Math.min(
+        replayDurationMs,
+        replayPosition + delta * replaySpeed,
+      );
       replayLastFrameTime = now;
 
       if (replayPosition >= replayDurationMs) {
         replayPlaying = false;
         replayLastFrameTime = 0;
-        if (replayStatus) replayStatus.textContent = `Завершено · ${replayRoomId}`;
+        if (replayStatus)
+          replayStatus.textContent = `Завершено · ${replayRoomId}`;
         updateReplayControls();
       }
     }
@@ -1002,7 +1050,10 @@ function render(alpha, stats) {
       }
 
       const elapsed = now - remote.receivedAt;
-      const interpolationAlpha = Math.min(elapsed / (NETWORK_UPDATE_INTERVAL * 1000), 1);
+      const interpolationAlpha = Math.min(
+        elapsed / (NETWORK_UPDATE_INTERVAL * 1000),
+        1,
+      );
       const previous = remote.previous;
       const current = remote.current;
 
@@ -1059,10 +1110,7 @@ function startGame(config = {}) {
   }
 
   maxAsteroids = Math.max(1, Number(config.asteroids) || 6);
-  asteroidSpeedMultiplier = Math.max(
-    0.1,
-    Number(config.asteroidSpeed) || 1,
-  );
+  asteroidSpeedMultiplier = Math.max(0.1, Number(config.asteroidSpeed) || 1);
 
   score = 0;
   asteroidSpawnTimer = 0;
@@ -1211,11 +1259,3 @@ window.addEventListener('beforeunload', () => {
   surface.destroy();
   audio.destroy();
 });
-
-
-
-
-
-
-
-

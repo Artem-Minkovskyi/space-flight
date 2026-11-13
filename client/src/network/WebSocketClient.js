@@ -1,4 +1,3 @@
-
 export class WebSocketClient {
   constructor({
     url,
@@ -47,7 +46,10 @@ export class WebSocketClient {
     });
 
     this.socket.addEventListener('message', (event) => {
-      if (event.data instanceof ArrayBuffer) { this.onBinary(event.data); return; }
+      if (event.data instanceof ArrayBuffer) {
+        this.onBinary(event.data);
+        return;
+      }
       try {
         this.onMessage(JSON.parse(event.data));
       } catch (error) {
@@ -90,7 +92,10 @@ export class WebSocketClient {
   }
 
   sendBinary(buffer) {
-    if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 1024 * 1024) {
+    if (
+      this.socket?.readyState === WebSocket.OPEN &&
+      this.socket.bufferedAmount < 1024 * 1024
+    ) {
       this.socket.send(buffer);
       return true;
     }

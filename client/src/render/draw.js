@@ -1,4 +1,3 @@
-
 const TAU = Math.PI * 2;
 
 let stars = [];

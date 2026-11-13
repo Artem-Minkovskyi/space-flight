@@ -1,4 +1,3 @@
-
 import { EventEmitter } from 'node:events';
 
 export class Room extends EventEmitter {
@@ -50,10 +49,7 @@ export class Room extends EventEmitter {
 
   broadcast(message, excludedClient = null) {
     for (const client of this.clients.keys()) {
-      if (
-        client === excludedClient ||
-        client.readyState !== 1
-      ) {
+      if (client === excludedClient || client.readyState !== 1) {
         continue;
       }
 

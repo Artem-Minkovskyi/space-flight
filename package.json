@@ -5,7 +5,8 @@
   "type": "module",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "shared"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=client",
@@ -14,13 +15,23 @@
     "preview": "npm run preview --workspace=client",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:determinism": "tsx --test tests/determinism.test.ts",
+    "ci": "npm run typecheck && npm run test:determinism && npm run lint && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.14.0",
     "globals": "^17.14.0",
     "prettier": "^3.9.10",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "@types/node": "^22.19.3",
+    "@types/ws": "^8.18.1"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
   }
 }

@@ -50,55 +50,47 @@
         </div>
       </section>
 
+      <section class="replay-panel" id="replay-panel">
+        <div class="replay-header">
+          <div>
+            <p class="eyebrow">MATCH RECORDING</p>
+            <h2>REPLAY</h2>
+          </div>
 
-    <section class="replay-panel" id="replay-panel">
-      <div class="replay-header">
-        <div>
-          <p class="eyebrow">MATCH RECORDING</p>
-          <h2>REPLAY</h2>
+          <span class="replay-status" id="replay-status">
+            Очікування запису
+          </span>
         </div>
 
-        <span class="replay-status" id="replay-status">
-          Очікування запису
-        </span>
-      </div>
+        <div class="replay-controls">
+          <button id="replay-load" type="button">ЗАВАНТАЖИТИ</button>
 
-      <div class="replay-controls">
-        <button id="replay-load" type="button">
-          ЗАВАНТАЖИТИ
-        </button>
+          <button id="replay-play" type="button" disabled>PLAY</button>
 
-        <button id="replay-play" type="button" disabled>
-          PLAY
-        </button>
+          <button id="replay-pause" type="button" disabled>PAUSE</button>
 
-        <button id="replay-pause" type="button" disabled>
-          PAUSE
-        </button>
+          <select id="replay-speed" disabled>
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
 
-        <select id="replay-speed" disabled>
-          <option value="0.5">0.5x</option>
-          <option value="1" selected>1x</option>
-          <option value="2">2x</option>
-        </select>
-      </div>
+        <div class="replay-timeline">
+          <span id="replay-current-time">00:00</span>
 
-      <div class="replay-timeline">
-        <span id="replay-current-time">00:00</span>
+          <input
+            id="replay-progress"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            disabled
+          />
 
-        <input
-          id="replay-progress"
-          type="range"
-          min="0"
-          max="100"
-          value="0"
-          disabled
-        />
-
-        <span id="replay-duration">00:00</span>
-      </div>
-    </section>
-
+          <span id="replay-duration">00:00</span>
+        </div>
+      </section>
 
       <footer class="bottom-bar">
         <div class="controls">
@@ -112,7 +104,6 @@
         <p>Краї арени з'єднані · Local render: 60 Hz · Server tick: 30 Hz</p>
       </footer>
     </main>
-
 
     <!-- Панель мережевої гри -->
     <section class="network-panel hidden" id="network-panel">
@@ -130,7 +121,10 @@
 
       <div class="netgraph" aria-live="polite">
         <strong>NETGRAPH</strong>
-        <span id="netgraph-values">RTT: — ms · Snapshot age: — ms · Traffic: 0 B/s · Input queue: 0 · Correction: 0 px</span>
+        <span id="netgraph-values"
+          >RTT: — ms · Snapshot age: — ms · Traffic: 0 B/s · Input queue: 0 ·
+          Correction: 0 px</span
+        >
       </div>
 
       <div class="network-content">
@@ -159,9 +153,7 @@
             <li>Очікування гравців...</li>
           </ul>
 
-          <button id="leave-room" type="button">
-            ПОКИНУТИ КІМНАТУ
-          </button>
+          <button id="leave-room" type="button">ПОКИНУТИ КІМНАТУ</button>
         </div>
       </div>
     </section>

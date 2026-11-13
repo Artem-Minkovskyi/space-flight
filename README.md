@@ -175,9 +175,7 @@ npm run build
 Фізична симуляція виконується з фіксованим кроком:
 
 ```js
-
 const step = 1 / 60;
-
 ```
 
 Таким чином, логіка гри не залежить безпосередньо від частоти оновлення монітора.
@@ -507,31 +505,21 @@ Entity
 Приклад:
 
 ```js
-
 async function loadData() {
+  try {
+    const response = await fetch('/api/rooms.json');
 
-try {
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
 
-const response = await fetch('/api/rooms.json');
+    return await response.json();
+  } catch (error) {
+    console.error('Помилка завантаження:', error);
 
-if (!response.ok) {
-
-throw new Error(`HTTP error: ${response.status}`);
-
+    throw error;
+  }
 }
-
-return await response.json();
-
-} catch (error) {
-
-console.error('Помилка завантаження:', error);
-
-throw error;
-
-}
-
-}
-
 ```
 
 `async/await` дозволяє записувати асинхронний код у послідовній формі, а `try/catch` — обробляти помилки.
@@ -541,13 +529,11 @@ throw error;
 Послідовне завантаження:
 
 ```js
-
 const image = await loadImage('/assets/ship.svg');
 
 const audio = await loadAudio('/assets/shot.wav');
 
 const config = await loadJson('/api/rooms.json');
-
 ```
 
 У цьому випадку кожна операція починається після завершення попередньої.
@@ -555,17 +541,13 @@ const config = await loadJson('/api/rooms.json');
 Паралельне завантаження:
 
 ```js
-
 const [image, audio, config] = await Promise.all([
+  loadImage('/assets/ship.svg'),
 
-loadImage('/assets/ship.svg'),
+  loadAudio('/assets/shot.wav'),
 
-loadAudio('/assets/shot.wav'),
-
-loadJson('/api/rooms.json'),
-
+  loadJson('/api/rooms.json'),
 ]);
-
 ```
 
 У цьому випадку операції запускаються незалежно одна від одної, тому загальний час очікування зазвичай менший.
@@ -585,39 +567,29 @@ loadJson('/api/rooms.json'),
 Файл `public/manifest.json` містить перелік ресурсів гри:
 
 ```json
-
 {
+  "images": {
+    "ship": "/assets/sprites/ship.svg",
 
-"images": {
+    "bullet": "/assets/sprites/bullet.svg",
 
-"ship": "/assets/sprites/ship.svg",
+    "asteroid": "/assets/sprites/asteroid.svg",
 
-"bullet": "/assets/sprites/bullet.svg",
+    "explosion": "/assets/sprites/explosion.svg"
+  },
 
-"asteroid": "/assets/sprites/asteroid.svg",
+  "audio": {
+    "shot": "/assets/audio/shot.wav",
 
-"explosion": "/assets/sprites/explosion.svg"
+    "hit": "/assets/audio/hit.wav",
 
-},
+    "explosion": "/assets/audio/explosion.wav"
+  },
 
-"audio": {
-
-"shot": "/assets/audio/shot.wav",
-
-"hit": "/assets/audio/hit.wav",
-
-"explosion": "/assets/audio/explosion.wav"
-
-},
-
-"json": {
-
-"arena": "/api/rooms.json"
-
+  "json": {
+    "arena": "/api/rooms.json"
+  }
 }
-
-}
-
 ```
 
 Реалізовано функції:
@@ -867,17 +839,13 @@ Replay відтворює записані стани кораблів грав�
 ## Приклад 1. Синхронний код і Promise
 
 ```js
-
 console.log('1');
 
 Promise.resolve().then(() => {
-
-console.log('2');
-
+  console.log('2');
 });
 
 console.log('3');
-
 ```
 
 Результат:
@@ -903,23 +871,17 @@ console.log('3');
 ## Приклад 2. Promise та setTimeout
 
 ```js
-
 console.log('A');
 
 setTimeout(() => {
-
-console.log('B');
-
+  console.log('B');
 }, 0);
 
 Promise.resolve().then(() => {
-
-console.log('C');
-
+  console.log('C');
 });
 
 console.log('D');
-
 ```
 
 Результат:
@@ -949,35 +911,25 @@ B
 ## Приклад 3. setTimeout усередині Promise
 
 ```js
-
 console.log('start');
 
 Promise.resolve().then(() => {
+  console.log('promise');
 
-console.log('promise');
+  setTimeout(() => {
+    console.log('timer');
+  }, 0);
 
-setTimeout(() => {
-
-console.log('timer');
-
-}, 0);
-
-Promise.resolve().then(() => {
-
-console.log('nested promise');
-
-});
-
+  Promise.resolve().then(() => {
+    console.log('nested promise');
+  });
 });
 
 setTimeout(() => {
-
-console.log('second timer');
-
+  console.log('second timer');
 }, 0);
 
 console.log('end');
-
 ```
 
 Результат:
@@ -1013,15 +965,12 @@ timer
 ## Приклад 4. async/await
 
 ```js
-
 async function run() {
+  console.log('1');
 
-console.log('1');
+  await Promise.resolve();
 
-await Promise.resolve();
-
-console.log('2');
-
+  console.log('2');
 }
 
 console.log('3');
@@ -1029,7 +978,6 @@ console.log('3');
 run();
 
 console.log('4');
-
 ```
 
 Результат:
@@ -1061,23 +1009,17 @@ console.log('4');
 ## Приклад 5. requestAnimationFrame та Promise
 
 ```js
-
 console.log('start');
 
 requestAnimationFrame(() => {
-
-console.log('animation frame');
-
+  console.log('animation frame');
 });
 
 Promise.resolve().then(() => {
-
-console.log('promise');
-
+  console.log('promise');
 });
 
 console.log('end');
-
 ```
 
 Синхронна та мікрозадачна частини мають такий порядок:
@@ -1328,10 +1270,6 @@ space-flight/
 
 **Рік:** 2026
 
-
-
-
-
 ⋮⋮⋮⋮
 
 ---
@@ -1339,20 +1277,24 @@ space-flight/
 # Лабораторна робота №5 — Server-authoritative Networking
 
 ## Мета роботи
+
 Перенести обчислення руху кораблів на сервер, реалізувати детерміновану симуляцію з фіксованим кроком, клієнтське передбачення, підтвердження стану та компактний бінарний протокол.
 
 ## Архітектура
+
 - `shared/simulation.js` — спільна детермінована функція руху корабля без залежності від DOM або Node.js.
 - `shared/protocol.js` — бінарне кодування команд і знімків стану через `DataView` у little-endian.
 - `server/src/websocket/server.js` — серверний цикл із частотою 30 тік/с. Наступний запуск планується від цільового часу через `setTimeout`, щоб не накопичувати дрейф `setInterval`.
 - `client/src/main.js` — надсилання команд throttle/turn/fire із послідовним номером, локальне передбачення та повторне застосування непідтверджених команд після отримання snapshot.
 
 ## Протокол
+
 Бінарна команда має 10 байтів: версія (1), тип (1), sequence (4), throttle (1), turn (2), fire (1). Кут повороту/керування передається як Int16. Snapshot містить версію, тип, номер серверного тіka, кількість гравців і записи стану гравців.
 
 За замовчуванням використовується бінарний режим. Для порівняння JSON можна відкрити клієнт із параметром `?protocol=json`.
 
 ## Перевірка
+
 1. Запустити сервер: `npm run dev:server`.
 2. Запустити клієнт: `npm run dev`.
 3. Відкрити гру у двох окремих вікнах браузера.
@@ -1361,6 +1303,75 @@ space-flight/
 6. Для JSON-режиму додати `?protocol=json` до адреси клієнта.
 
 ## Аналіз і обмеження поточної реалізації
+
 Сервер є авторитетним для координат і швидкості кораблів: клієнт передає команди, а не готові координати. Клієнт зберігає чергу команд і після snapshot повторно застосовує команди, sequence яких ще не підтверджено сервером. Для точного вимірювання RTT потрібен окремий ping/pong із часовою міткою; у поточній панелі RTT позначено як недоступний. Значення трафіку та черги є локальними оцінками клієнта.
 
 Бінарний протокол зменшує розмір повідомлень порівняно з JSON за рахунок фіксованих полів і числових типів. Сервер перевіряє команди, але для production-гри додатково потрібно винести постріли, кулі, зіткнення та шкоду в авторитетну серверну симуляцію. Також потрібні повноцінна інтерполяція віддалених гравців у минулому та згладжування корекцій протягом приблизно 100 мс.
+
+## Lab 06 — TypeScript for protocol and simulation
+
+The Lab 5 project is organized as three npm workspaces (`client`, `server`, and `shared`). The shared simulation and binary protocol have been migrated to TypeScript in the `@space-flight/shared` workspace.
+`shared/types.ts` defines readonly vector/state contracts and branded `PlayerId`,
+`RoomId`, `SimulationTick`, and `SequenceNumber` types. Snapshot entities use the
+`kind: "ship"` discriminant. Exhaustive switches use `never` so adding a new entity
+kind or client-message variant requires an explicit handler.
+
+Runtime data is still untrusted: `server/src/websocket/validation.ts` uses Zod
+schemas and `safeParse` for JSON WebSocket messages, while `server/src/config.ts`
+validates environment configuration. The parser accepts `unknown`; malformed JSON
+returns a validation result instead of escaping as an exception, is written to the
+match log, and causes the socket to close. The browser WebSocket client also validates
+incoming JSON server messages with Zod. The binary decoder checks packet length,
+protocol version, field ranges, flags, and finite numeric values.
+
+### TypeScript concepts used
+
+- **Structural typing and inference:** interfaces describe the shape of simulation
+  state and protocol messages; return types are inferred where the implementation
+  makes them unambiguous.
+- **`unknown` and narrowing:** JSON is parsed as untrusted input and is narrowed by
+  Zod before application code can use it. No explicit `any` is used in the migrated
+  TypeScript modules.
+- **Discriminated unions and `never`:** message `type` and entity `kind` determine
+  the available fields; exhaustive switches make missing cases a compile-time error.
+- **Generics and `readonly`:** immutable state/vector contracts prevent accidental
+  mutation at module boundaries; generic brands distinguish otherwise similar
+  primitive identifiers.
+- **Branded types:** player ID, room ID, simulation tick, and input sequence cannot
+  be interchanged accidentally at compile time.
+- **Strict compiler options:** `strict`, `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`, and `useUnknownInCatchVariables` are enabled.
+
+### Errors and improvements found during migration
+
+Reviewing the original binary decoder showed that it accepted any non-zero `fire`
+byte as `true` and did not explicitly reject the reserved minimum values of the
+signed throttle/turn fields. The TypeScript decoder now validates those ranges,
+checks the protocol version and exact packet size, and rejects invalid flags and
+non-finite snapshot values. This is runtime validation: TypeScript types are erased
+when the program runs and cannot validate network bytes by themselves.
+
+### Framework decision
+
+The Canvas renderer and game loop remain framework-free. The assignment concerns
+typing the protocol and deterministic simulation, not replacing the rendering
+architecture. Introducing Svelte, Vue, or React only for the Lobby/HUD would add a
+second UI architecture without improving the Canvas loop, so the existing DOM-based
+Lobby and HUD are retained.
+
+### Reflection
+
+1. **Why use `unknown` instead of `any`?** `unknown` requires validation or type
+   narrowing before a value can be used. `any` disables those checks and can let
+   malformed network data flow into the simulation.
+2. **Why are branded types useful?** `PlayerId`, `SimulationTick`, and
+   `SequenceNumber` are all numbers at runtime, but they represent different
+   concepts. Branding prevents accidental interchange in TypeScript code.
+3. **Why is Zod still needed if the project uses TypeScript?** TypeScript checks
+   source code before execution. It does not inspect incoming WebSocket JSON or
+   binary packets at runtime, so Zod and explicit decoder checks validate external
+   data.
+
+After pulling the Lab 6 changes, run `npm install` once to install TypeScript, tsx, Zod, and refresh the npm lockfile. Run `npm run format` to format the migrated sources. Then run `npm run typecheck` to perform the strict TypeScript check and
+`npm run test:determinism` to verify that the same fixed-step input sequence
+produces the same final simulation state.
