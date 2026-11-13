@@ -1,3 +1,5 @@
+import { SpatialHash } from './spatial-hash.js';
+
 export function checkCircleCollision(a, b) {
   const dx = a.position.x - b.position.x;
   const dy = a.position.y - b.position.y;
@@ -11,10 +13,25 @@ export function checkCircleCollision(a, b) {
 export function resolveCollisions(world, emit = () => {}) {
   const entities = [...world].filter((entity) => !entity.dead);
 
+  const grid = new SpatialHash(128);
+  for (const entity of entities) {
+    grid.insert(entity, entity.position.x, entity.position.y, entity.radius ?? 0);
+  }
+  const indices = new Map(entities.map((entity, index) => [entity, index]));
+  const pairs = [];
+  const seen = new Set();
   for (let i = 0; i < entities.length; i++) {
-    for (let j = i + 1; j < entities.length; j++) {
-      const a = entities[i];
-      const b = entities[j];
+    const a = entities[i];
+    const candidates = grid.nearby(a.position.x, a.position.y, a.radius ?? 0);
+    for (const b of candidates) {
+      const j = indices.get(b);
+      if (j === undefined || j <= i) continue;
+      const pairKey = `${i}:${j}`;
+      if (!seen.has(pairKey)) { seen.add(pairKey); pairs.push([a, b]); }
+    }
+  }
+
+  for (const [a, b] of pairs) {
 
       if (a.dead || b.dead) {
         continue;
@@ -67,6 +84,5 @@ export function resolveCollisions(world, emit = () => {}) {
       } else if (b.kind === 'ship' && a.kind === 'pickup') {
         a.applyTo(b);
       }
-    }
   }
 }

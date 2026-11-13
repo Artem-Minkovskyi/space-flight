@@ -1,3 +1,5 @@
+[![CI](https://github.com/Artem-Minkovskyi/space-flight/actions/workflows/ci.yml/badge.svg)](https://github.com/Artem-Minkovskyi/space-flight/actions/workflows/ci.yml)
+
 # Space Flight — JavaScript Multiplayer Game
 
 Браузерна гра **Space Flight**, розроблена на Vanilla JavaScript, HTML5 Canvas 2D та Vite у межах лабораторних робіт №1–4 з дисципліни «JavaScript».
@@ -1375,3 +1377,43 @@ Lobby and HUD are retained.
 After pulling the Lab 6 changes, run `npm install` once to install TypeScript, tsx, Zod, and refresh the npm lockfile. Run `npm run format` to format the migrated sources. Then run `npm run typecheck` to perform the strict TypeScript check and
 `npm run test:determinism` to verify that the same fixed-step input sequence
 produces the same final simulation state.
+
+
+# Лабораторна робота №7 — V8, пам’ять і тести
+
+## Автоматизоване тестування
+
+Для тестування використовується Vitest. `tests/unit/shared.test.ts` перевіряє детерміновану симуляцію, двійковий протокол і runtime-схеми Zod. Property-based перевірки на fast-check охоплюють квантування input-пакетів, довжину пакетів, контрольовану відмову на пошкоджених даних, межі арени та валідацію повідомлень. Додаткові тести перевіряють `Vector2`, інтеграцію корабля, колізії, object pool, spatial hash, цикл кадру й життєвий цикл кімнат.
+
+Команди:
+
+```bash
+npm run test                 # усі unit/property тести
+npm run test:coverage        # тести з V8 coverage
+npm run test:e2e             # Playwright: два ізольовані browser contexts
+npm run test:load            # навантаження WebSocket 8/32/64/128 клієнтів
+LOAD_DURATION_MS=30000 npm run test:load -- 8  # 8 клієнтів-ботів протягом 30 секунд
+npm run ci                   # повний локальний CI
+```
+
+## E2E-сценарій
+
+Playwright відкриває два незалежні Chromium contexts, під'єднує їх до кімнати `normal`, перевіряє доставку повідомлення чату та зміну координати першого гравця у snapshot після input-команди.
+
+## Пам’ять і продуктивність
+
+`Explosion` використовує пул частинок та оновлює координати без створення тимчасових векторів у кожному кадрі. Broad-phase зіткнень переведено на просторову хеш-сітку; narrow-phase залишає точну перевірку кіл. Потрібно перевіряти профіль до/після на однаковому сценарії, оскільки spatial hash має власну вартість побудови.
+
+### V8: короткий теоретичний огляд
+
+V8 спочатку розбирає JavaScript і компілює його у байткод для інтерпретатора Ignition. Гарячі ділянки можуть оптимізуватися TurboFan на основі профілю виконання та припущень про типи. Якщо припущення перестає бути правильним, можливі deoptimization і повернення до менш оптимізованого виконання. Hidden classes (Maps) описують форму об'єктів, а inline caches прискорюють повторний доступ до властивостей за стабільної форми. Тому властивості об'єктів бажано створювати в однаковому порядку й не змінювати їхню структуру в гарячих циклах.
+
+Garbage Collector звільняє недосяжні об'єкти. Часті короткоживучі алокації збільшують роботу GC; object pool зменшує кількість повторних створень об'єктів, якщо об'єкти часто створюються й знищуються. Пул потрібно обмежувати й повертати об'єкти після використання, інакше він сам утримуватиме пам'ять.
+
+### Web Worker
+
+У поточній архітектурі стан симуляції містить взаємопов'язані змінювані Entity/Vector2 та використовується рендерером. Перенесення цього стану в Worker спричинило б копіювання або складну передачу буферів і синхронізацію кожного кадру. Без виміряного CPU-вузького місця та ізольованого компонента ботів це не дає обґрунтованої переваги, тому Worker не включений у головний цикл. Обґрунтування й умови перегляду рішення наведені у `docs/performance/LAB7-PROFILING.md`.
+
+## Профілювання та вимірювання
+
+Інструкція для 30-секундного запису з 8 ботами, таблиці frame-time p50/p95/p99, GC-пауз і flame chart, а також сценарій серверного навантаження містяться у `docs/performance/LAB7-PROFILING.md`. Числові результати потрібно внести після фактичного запуску на цільовому комп’ютері; репозиторій не містить вигаданих показників.
