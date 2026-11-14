@@ -3,7 +3,8 @@ import { createReadStream, statSync } from 'node:fs';
 import path from 'node:path';
 import { replayMatches } from '../logs/replay.js';
 import { pipeline } from 'node:stream';
-import { config } from '../config.ts';
+import { config } from '../config.js';
+import { isReady, renderMetrics } from '../runtime.js';
 import { roomManager } from '../rooms/index.js';
 
 const MIME_TYPES = {
@@ -11,6 +12,7 @@ const MIME_TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -73,6 +75,11 @@ function handleRoomsApi(request, response) {
           sendJson(response, 400, {
             error: 'Room name must contain 1–32 characters',
           });
+          return;
+        }
+
+        if (roomManager.rooms.size >= config.maxRooms) {
+          sendJson(response, 429, { error: 'Room limit reached' });
           return;
         }
 
@@ -198,8 +205,22 @@ export function createHttpServer() {
     if (url.pathname === '/health' && request.method === 'GET') {
       sendJson(response, 200, {
         status: 'ok',
+        gitSha: config.gitSha,
         timestamp: new Date().toISOString(),
       });
+      return;
+    }
+
+    if (url.pathname === '/ready' && request.method === 'GET') {
+      sendJson(response, isReady() ? 200 : 503, {
+        status: isReady() ? 'ready' : 'not_ready',
+      });
+      return;
+    }
+
+    if (url.pathname === '/metrics' && request.method === 'GET') {
+      response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+      response.end(renderMetrics());
       return;
     }
 

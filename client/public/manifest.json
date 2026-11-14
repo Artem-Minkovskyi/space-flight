@@ -1,16 +1,11 @@
 {
-  "images": {
-    "ship": "/assets/sprites/ship.svg",
-    "bullet": "/assets/sprites/bullet.svg",
-    "asteroid": "/assets/sprites/asteroid.svg",
-    "explosion": "/assets/sprites/explosion.svg"
-  },
-  "audio": {
-    "shot": "/assets/audio/shot.wav",
-    "hit": "/assets/audio/hit.wav",
-    "explosion": "/assets/audio/explosion.wav"
-  },
-  "json": {
-    "arena": "/api/rooms"
-  }
+  "name": "Space Flight Multiplayer",
+  "short_name": "Space Flight",
+  "description": "Багатокористувацька космічна гра",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "icons": []
 }

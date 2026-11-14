@@ -1200,7 +1200,7 @@ async function startLoading() {
     loadingStatus.textContent = 'Завантаження ресурсів...';
 
     const assets = await loadAll({
-      manifestUrl: '/manifest.json',
+      manifestUrl: '/assets-manifest.json',
       audioContext: audio.context,
       signal: loadingController.signal,
       onProgress: updateProgress,

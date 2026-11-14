@@ -1,98 +1,79 @@
 import { createHttpServer } from './http/server.js';
-import { attachWebSocketServer } from './websocket/server.ts';
+import { attachWebSocketServer } from './websocket/server.js';
 import { roomManager } from './rooms/index.js';
 import { MatchLogger } from './logs/matchLogger.js';
-import { config } from './config.ts';
+import { config } from './config.js';
+import pino from 'pino';
+import { beginShutdown, setReady, updateRuntimeMetrics } from './runtime.js';
 
-const logger = await new MatchLogger(config.logDirectory).start();
+const log = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+const matchLogger = await new MatchLogger(config.logDirectory).start();
 
 roomManager.setEventHandler((eventName, data) => {
-  const accepted = logger.log({
-    type: eventName,
-    ...data,
-  });
-
-  if (!accepted) {
-    console.warn('Logger buffer is full or unavailable');
-  }
+  log.info({ event: eventName, ...data }, 'room event');
+  matchLogger.log({ type: eventName, ...data });
 });
 
 const httpServer = createHttpServer();
-
-const webSocketServer = attachWebSocketServer(httpServer, roomManager, logger);
-
-httpServer.on('error', (error) => {
-  console.error('HTTP server error:', error);
+const webSocketServer = attachWebSocketServer(httpServer, roomManager, {
+  log,
+  maxConnectionsPerIp: config.maxConnectionsPerIp,
+  maxPlayersPerRoom: config.maxPlayersPerRoom,
+  allowedOrigins: config.allowedOrigins,
 });
 
+httpServer.on('error', (error) => {
+  log.error({ err: error }, 'HTTP server error');
+});
 webSocketServer.on('error', (error) => {
-  console.error('WebSocket server error:', error);
+  log.error({ err: error }, 'WebSocket server error');
 });
 
 let shuttingDown = false;
-
 async function shutdown(signal) {
-  if (shuttingDown) {
-    return;
-  }
-
+  if (shuttingDown) return;
   shuttingDown = true;
+  beginShutdown();
+  log.info({ signal }, 'graceful shutdown started');
 
-  console.log(`\nReceived ${signal}. Shutting down...`);
-
-  const forceCloseTimer = setTimeout(() => {
-    console.warn('Forcing remaining WebSocket connections to close');
-
-    for (const socket of webSocketServer.clients) {
-      socket.terminate();
-    }
-  }, 3000);
+  const forceTimer = setTimeout(() => {
+    for (const socket of webSocketServer.clients) socket.terminate();
+  }, 7000);
+  forceTimer.unref();
 
   try {
-    const httpClosed = new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
-
     for (const socket of webSocketServer.clients) {
       if (socket.readyState === 1) {
+        socket.send(JSON.stringify({ type: 'shutdown', message: 'Server restarting' }));
         socket.close(1001, 'Server shutting down');
-      } else {
-        socket.terminate();
-      }
+      } else socket.terminate();
     }
-
-    await new Promise((resolve, reject) => {
-      webSocketServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
-
-    await httpClosed;
-    await logger.close();
-
-    console.log('All connections closed.');
-    console.log('Log stream flushed.');
-    console.log('Server shutdown complete.');
-
+    await new Promise(resolve => httpServer.close(resolve));
+    await new Promise(resolve => webSocketServer.close(resolve));
+    await matchLogger.close();
+    clearTimeout(forceTimer);
+    log.info('graceful shutdown complete');
     process.exitCode = 0;
   } catch (error) {
-    console.error('Shutdown error:', error);
+    clearTimeout(forceTimer);
+    log.error({ err: error }, 'shutdown failed');
     process.exitCode = 1;
-  } finally {
-    clearTimeout(forceCloseTimer);
   }
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('uncaughtException', (error) => {
+  log.fatal({ err: error }, 'uncaught exception');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  log.fatal({ err: reason }, 'unhandled rejection');
+  process.exit(1);
+});
 
-httpServer.listen(config.port, () => {
-  console.log(`HTTP server running at http://localhost:${config.port}`);
-  console.log(`WebSocket server running at ws://localhost:${config.port}/ws`);
-  console.log(`Client directory: ${config.clientDirectory}`);
-  console.log(`Log directory: ${config.logDirectory}`);
+httpServer.listen(config.port, '0.0.0.0', () => {
+  setReady(true);
+  updateRuntimeMetrics({ rooms: roomManager.rooms.size });
+  log.info({ port: config.port, gitSha: config.gitSha }, 'server listening');
 });

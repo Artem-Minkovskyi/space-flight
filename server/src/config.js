@@ -1,29 +1,26 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
-const currentFile = fileURLToPath(import.meta.url);
-const currentDirectory = path.dirname(currentFile);
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const schema = z.object({
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  LOG_DIR: z.string().trim().min(1).optional(),
+  ALLOWED_ORIGINS: z.string().default(''),
+  MAX_CONNECTIONS_PER_IP: z.coerce.number().int().min(1).max(1000).default(20),
+  MAX_ROOMS: z.coerce.number().int().min(1).max(10000).default(100),
+  MAX_PLAYERS_PER_ROOM: z.coerce.number().int().min(1).max(256).default(16),
+  GIT_SHA: z.string().default(process.env.GITHUB_SHA ?? 'local'),
+});
 
-function parsePort(value) {
-  const port = Number(value ?? 3000);
-
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid PORT value: ${value}`);
-  }
-
-  return port;
-}
-
-function parseLogDirectory(value) {
-  if (value !== undefined && value.trim() === '') {
-    throw new Error('LOG_DIR cannot be empty');
-  }
-
-  return path.resolve(value ?? path.join(currentDirectory, '../logs'));
-}
-
+const env = schema.parse(process.env);
 export const config = Object.freeze({
-  port: parsePort(process.env.PORT),
-  logDirectory: parseLogDirectory(process.env.LOG_DIR),
+  port: env.PORT,
+  logDirectory: path.resolve(env.LOG_DIR ?? path.join(currentDirectory, '../logs')),
   clientDirectory: path.resolve(currentDirectory, '../../client/dist'),
+  allowedOrigins: env.ALLOWED_ORIGINS.split(',').map(v => v.trim()).filter(Boolean),
+  maxConnectionsPerIp: env.MAX_CONNECTIONS_PER_IP,
+  maxRooms: env.MAX_ROOMS,
+  maxPlayersPerRoom: env.MAX_PLAYERS_PER_ROOM,
+  gitSha: env.GIT_SHA,
 });

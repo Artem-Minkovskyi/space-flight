@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#070b18" />
+    <meta name="theme-color" content="#070b18" />\n    <link rel="manifest" href="/manifest.json" />
     <title>Space Flight — Lab 03</title>
   </head>
   <body>
@@ -198,6 +198,11 @@
       </div>
     </section>
 
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.error));
+      }
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

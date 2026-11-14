@@ -1,3 +1,58 @@
+
+# Lab 08 — Ship It: production deployment
+
+## Production architecture
+
+The browser loads the static client from the same Node.js process that serves the HTTP API and the `/ws` WebSocket endpoint. A room is an in-memory object owned by this process; therefore, all players in a room must connect to the same process. Do not scale this version horizontally without sticky routing and a shared room/state layer.
+
+```text
+Browser A ── HTTPS / WSS ──┐
+                           ├── Reverse proxy / host ── Node.js process
+Browser B ── HTTPS / WSS ──┘                         ├── HTTP + static client
+                                                     ├── /health /ready /metrics
+                                                     ├── /ws
+                                                     └── in-memory rooms
+```
+
+## Docker
+
+```bash
+docker build -t space-flight:lab-08 .
+docker run --rm -p 3000:3000 -e PORT=3000 space-flight:lab-08
+docker stop <container>
+```
+
+The image uses a build stage and a runtime stage. The runtime starts Node directly, runs as a non-root user, and includes a Docker health check. Verify the final image size with `docker image ls space-flight:lab-08`; the required limit is below 200 MB.
+
+## Runtime endpoints
+
+- `/health` — process liveness and the build Git SHA.
+- `/ready` — readiness for accepting new players.
+- `/metrics` — Prometheus text metrics for players, rooms, messages, bytes, tick duration, event-loop utilization and memory.
+
+Environment:
+- `PORT` (default `3000`)
+- `LOG_DIR`
+- `ALLOWED_ORIGINS` (comma-separated exact origins)
+- `MAX_CONNECTIONS_PER_IP` (default `20`)
+- `MAX_ROOMS` (default `100`; room creation cap to be enforced at API layer)
+- `MAX_PLAYERS_PER_ROOM` (default `16`)
+- `GIT_SHA`
+
+## Release
+
+Pushing a tag matching `v*` builds and publishes a container to GitHub Container Registry (GHCR). A hosting provider still needs to be configured to run that image with persistent WebSocket support, set the environment variables, and route HTTPS/WSS traffic to the container. A public production URL, external RTT measurements and cross-network play test must be added after deployment.
+
+## PWA
+
+The client includes a web app manifest and service worker for installability and static app-shell caching. WebSocket and API requests are intentionally not cached.
+
+## Known limitations
+
+- Room state is held in a single Node.js process; multi-instance horizontal scaling is not supported.
+- A host URL, external WSS handshake, two-network play test, RTT measurements and host-specific deployment workflow secrets must be supplied after choosing a hosting provider.
+- Container image size and `docker stop` shutdown time must be measured on the target environment before claiming the acceptance thresholds.
+
 [![CI](https://github.com/Artem-Minkovskyi/space-flight/actions/workflows/ci.yml/badge.svg)](https://github.com/Artem-Minkovskyi/space-flight/actions/workflows/ci.yml)
 
 # Space Flight — JavaScript Multiplayer Game

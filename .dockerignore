@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+coverage
+playwright-report
+test-results
+dist
+.DS_Store
+*.zip

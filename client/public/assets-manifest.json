@@ -1,0 +1,16 @@
+{
+  "images": {
+    "ship": "/assets/sprites/ship.svg",
+    "bullet": "/assets/sprites/bullet.svg",
+    "asteroid": "/assets/sprites/asteroid.svg",
+    "explosion": "/assets/sprites/explosion.svg"
+  },
+  "audio": {
+    "shot": "/assets/audio/shot.wav",
+    "hit": "/assets/audio/hit.wav",
+    "explosion": "/assets/audio/explosion.wav"
+  },
+  "json": {
+    "arena": "/api/rooms"
+  }
+}

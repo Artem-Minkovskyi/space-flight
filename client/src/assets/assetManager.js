@@ -1,7 +1,7 @@
 import { fetchJson, loadImage, loadAudio, loadJson } from './loader.js';
 
 export async function loadAll({
-  manifestUrl = '/manifest.json',
+  manifestUrl = '/assets-manifest.json',
   audioContext,
   signal,
   onProgress = () => {},

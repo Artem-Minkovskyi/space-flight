@@ -1,3 +1,4 @@
+cat > .github/workflows/ci.yml <<'EOF'
 name: CI
 
 on:
@@ -10,16 +11,21 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      ALLOWED_ORIGINS: http://127.0.0.1:4173
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
       - run: npm run test:coverage
       - run: npm run lint
       - run: npm run build
       - run: npm run test:e2e
+EOF

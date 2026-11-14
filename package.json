@@ -23,7 +23,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:load": "node scripts/load-test.mjs"
+    "test:load": "node scripts/load-test.mjs",
+    "start": "npm run start --workspace=server"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
